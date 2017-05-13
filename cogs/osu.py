@@ -1333,6 +1333,8 @@ class Osu:
             await self.bot.say(msg)
 
     # used to track top plays of specified users (someone please make this better c:)
+    # Previous failed attempts include exponential blocking, using a single client session (unreliable),
+    # threading/request to update info and then displaying separately, aiohttp to update and then displaying separately
     async def play_tracker(self):
         key = self.osu_api_key["osu_api_key"]
         while self == self.bot.get_cog('Osu'):

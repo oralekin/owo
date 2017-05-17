@@ -28,7 +28,7 @@ help_msg = [
             ]
 modes = ["osu", "taiko", "ctb", "mania"]
 client = MongoClient()
-db = client['owo_database_2']
+db = client['owo_database_3']
 log = logging.getLogger("red.osu")
 log.setLevel(logging.DEBUG)
 
@@ -50,6 +50,7 @@ class Osu:
         self.max_map_disp = 3
         self.backoff_value = 16
         self.track_latency = []
+        self.cycle_time = [None, None, None , None]
         self.sync()
 
     # ---------------------------- Settings ------------------------------------
@@ -180,6 +181,8 @@ class Osu:
             info += "**▸ Tracking Latency (Global Moving Average [{}]):** {:.2f} min\n".format(len(self.track_latency),
                 sum(self.track_latency)/len(self.track_latency))
             info += "**▸ Tracking Latency Stdev:** {:.2f} min".format(numpy.std(self.track_latency))
+        info += "**▸ Last Cycle Time for each Gamemode:** {}, {}, {}, {}".format(
+            str(self.cycle_time[0]),str(self.cycle_time[1]),str(self.cycle_time[2]),str(self.cycle_time[3]))
 
         em.description = info
         await self.bot.say(embed = em)
@@ -718,7 +721,7 @@ class Osu:
             info += '▸ **Score:** {} ▸ **Combo:** x{}/{}\n'.format(userbest[i]['score'], userbest[i]['maxcombo'], best_beatmaps[i]['max_combo'])
             info += '▸ **Acc:** {:.2f}% ▸ **Stars:** {}★\n\n'.format(
                 float(best_acc[i]),
-                self._compare_val(best_beatmaps[i]['difficultyrating'], oppai_info, param = 'stars'))
+                self._compare_val(best_beatmaps[i]['difficultyrating'], oppai_info, param = 'stars', dec_places = 2))
 
             desc += info
         em = discord.Embed(description=desc, colour=server_user.colour)
@@ -729,15 +732,10 @@ class Osu:
 
     # because you people just won't stop bothering me about it
     def _fix_mods(self, mods:str):
-        if mods == 'DTHD':
-            return 'HDDT'
-        elif mods == 'HRHD':
-            return 'HDHR'
-        elif mods == 'DTHRHD':
-            return 'HDHRDT'
-        elif mods == 'PFSOFLNCHTRXDTSDHRHDEZNF':
+        if mods == 'PFSOFLNCHTRXDTSDHRHDEZNF':
             return '? KEY'
-        return mods
+        else:
+            return mods.replace('DTHRHD', 'HDHRDT').replace('DTHD','HDDT').replace('HRHD', 'HDHR')
 
     def _get_gamemode(self, gamemode:int):
         if gamemode == 1:
@@ -938,13 +936,16 @@ class Osu:
             try:
                 if url.find('https://osu.ppy.sh/u/') != -1:
                     user_id = url.replace('https://osu.ppy.sh/u/','')
-                    user_info = await get_user(key, self.osu_settings["type"]["default"], user_id, 0)
+                    user_info = await get_user(
+                        key, self.osu_settings["type"]["default"], user_id, 0)
                     find_user = db.user_settings.find_one({"user_id":user_id})
                     if find_user:
                         gamemode = int(find_user["default_gamemode"])
                     else:
                         gamemode = 0
-                    em = await self._get_user_info(self.osu_settings["type"]["default"], server, server_user, user_info[0], gamemode)
+                    em = await self._get_user_info(
+                        self.osu_settings["type"]["default"],
+                        server, server_user, user_info[0], gamemode)
                     await self.bot.send_message(message.channel, embed = em)
             except:
                 pass
@@ -952,8 +953,6 @@ class Osu:
     # processes user input for the beatmap
     async def process_beatmap(self, all_urls, message):
         key = self.osu_api_key["osu_api_key"]
-
-        print('PROCESSING URL')
 
         for url, mods in all_urls:
             #try:
@@ -974,7 +973,7 @@ class Osu:
         else:
             map_stat = float(map_stat)
             op_stat = float(omap[param])
-            if abs(round(map_stat, dec_places) - round(op_stat, dec_places)) > 0.05:
+            if int(round(op_stat, dec_places)) != 0 and abs(round(map_stat, dec_places) - round(op_stat, dec_places)) > 0.05:
                 return "{}({})".format(round(map_stat, dec_places),
                     round(op_stat, dec_places))
             else:
@@ -1343,8 +1342,6 @@ class Osu:
         msg = ""
         count_remove = 0
 
-
-
     # used to track top plays of specified users (someone please make this better c:)
     # Previous failed attempts include exponential blocking, using a single client session (unreliable),
     # threading/request to update info and then displaying separately, aiohttp to update and then displaying separately
@@ -1425,10 +1422,11 @@ class Osu:
                             besttime = datetime.datetime.strptime(best_timestamps[i], '%Y-%m-%d %H:%M:%S')
                             oldlastcheck = datetime.datetime.strptime(last_top, '%Y-%m-%d %H:%M:%S')
                             delta = besttime.minute - oldlastcheck.minute
-                            if len(self.track_latency) >= 10: # moving average of 10
-                                del self.track_latency[0]
-                            if delta >= 0:
-                                self.track_latency.append(delta) # track in minutes
+                            if self.cycle_time[gamemode_number] != None and self.cycle_time[gamemode_number].minute >= delta:
+                                if len(self.track_latency) >= 10: # moving average of 10
+                                    del self.track_latency[0]
+                                if delta >= 0:
+                                    self.track_latency.append(delta) # track in minutes
 
                             # update userinfo for next use
                             # print("LAST CHECK BEFORE: " + str(player['last_check']))
@@ -1445,6 +1443,8 @@ class Osu:
             loop_time = datetime.datetime.now()
             elapsed_time = loop_time - current_time
             print("Time ended for {}:".format(mode) + str(elapsed_time))
+            self.cycle_time[gamemode_number] = elapsed_time
+
             await asyncio.sleep(1) # quick pause
 
     async def _fetch_new(self, osu_id, mode:int):
@@ -1516,13 +1516,25 @@ class Osu:
                 pp_gain = ""
             else:
                 pp_gain = "({:+.2f})".format(dpp)
-            info += "▸ +{} ▸ **{:.2f}%** ▸ **{}** Rank ▸ **{:.2f} {}pp**\n".format(self._fix_mods(''.join(mods)), float(acc), play['rank'], float(play['pp']), pp_gain)
-            info += "▸ {} ▸ x{}/{} ▸ [{}/{}/{}/{}]\n".format(play['score'], play['maxcombo'], beatmap['max_combo'], play['count300'],play['count100'],play['count50'],play['countmiss'])
-            info += "▸ #{} → #{} ({}#{} → #{})".format(old_user_info['pp_rank'], new_user_info['pp_rank'], new_user_info['country'], old_user_info['pp_country_rank'], new_user_info['pp_country_rank'])
-        else:
-            info += "▸ +{} ▸ **{:.2f}%** ▸ **{}** Rank ▸ **{:.2f}pp**\n".format(self._fix_mods(''.join(mods)), float(acc), play['rank'], float(play['pp']))
-            info += "▸ {} ▸ x{}/{} ▸ [{}/{}/{}/{}]\n".format(play['score'], play['maxcombo'], beatmap['max_combo'], play['count300'],play['count100'],play['count50'],play['countmiss'])
-            info += "▸ #{} ({}#{})".format(new_user_info['pp_rank'], new_user_info['country'], new_user_info['pp_country_rank'])
+            info += "▸ +{} ▸ **{:.2f}%** ▸ **{}** Rank ▸ **{:.2f} {}pp**\n".format(self._fix_mods(''.join(mods)),
+                float(acc), play['rank'], float(play['pp']), pp_gain)
+            info += "▸ {} ▸ x{}/{} ▸ [{}/{}/{}/{}]\n".format(
+                play['score'], play['maxcombo'], beatmap['max_combo'],
+                play['count300'],play['count100'],play['count50'],play['countmiss'])
+            info += "▸ #{} → #{} ({}#{} → #{})".format(
+                old_user_info['pp_rank'], new_user_info['pp_rank'],
+                new_user_info['country'],
+                old_user_info['pp_country_rank'], new_user_info['pp_country_rank'])
+        else: # if first time playing
+            info += "▸ +{} ▸ **{:.2f}%** ▸ **{}** Rank ▸ **{:.2f}pp**\n".format(
+                self._fix_mods(''.join(mods)), float(acc), play['rank'], float(play['pp']))
+            info += "▸ {} ▸ x{}/{} ▸ [{}/{}/{}/{}]\n".format(
+                play['score'], play['maxcombo'], beatmap['max_combo'],
+                play['count300'],play['count100'],play['count50'],play['countmiss'])
+            info += "▸ #{} ({}#{})".format(
+                new_user_info['pp_rank'],
+                new_user_info['country'],
+                new_user_info['pp_country_rank'])
         em.description = info
         em.set_footer(text = "{} On osu! Official Server".format(play['date']))
         return em

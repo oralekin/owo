@@ -28,7 +28,7 @@ help_msg = [
             ]
 modes = ["osu", "taiko", "ctb", "mania"]
 client = MongoClient()
-db = client['owo_database_3']
+db = client['owo_database_2']
 log = logging.getLogger("red.osu")
 log.setLevel(logging.DEBUG)
 
@@ -50,7 +50,7 @@ class Osu:
         self.max_map_disp = 3
         self.backoff_value = 16
         self.track_latency = []
-        self.cycle_time = [None, None, None , None]
+        self.cycle_time = 0
         self.sync()
 
     # ---------------------------- Settings ------------------------------------
@@ -180,9 +180,8 @@ class Osu:
         if len(self.track_latency) != 0:
             info += "**▸ Tracking Latency (Global Moving Average [{}]):** {:.2f} min\n".format(len(self.track_latency),
                 sum(self.track_latency)/len(self.track_latency))
-            info += "**▸ Tracking Latency Stdev:** {:.2f} min".format(numpy.std(self.track_latency))
-        info += "**▸ Last Cycle Time for each Gamemode:** {}, {}, {}, {}".format(
-            str(self.cycle_time[0]),str(self.cycle_time[1]),str(self.cycle_time[2]),str(self.cycle_time[3]))
+            info += "**▸ Tracking Latency Stdev:** {:.2f} min\n".format(numpy.std(self.track_latency))
+        info += "**▸ Last Tracking Cycle Time:** {}".format(str(self.cycle_time))
 
         em.description = info
         await self.bot.say(embed = em)
@@ -1342,116 +1341,126 @@ class Osu:
         msg = ""
         count_remove = 0
 
-    # used to track top plays of specified users (someone please make this better c:)
-    # Previous failed attempts include exponential blocking, using a single client session (unreliable),
-    # threading/request to update info and then displaying separately, aiohttp to update and then displaying separately
-    async def play_tracker(self, mode:str):
-        max_num_set = 200
-        key = self.osu_api_key["osu_api_key"]
-        gamemode_number = self._get_gamemode_number(mode)
-        score_gamemode = self._get_gamemode_display(mode)
-
+    async def play_tracker(self):
         while self == self.bot.get_cog('Osu'):
-            print("Time started for {}".format(mode))
+            print("Time Started.")
             current_time = datetime.datetime.now()
-
-            # while loop until all users are processed max_num_set users at a time
+            loop = asyncio.get_event_loop()
             for player in db.track.find({}, no_cursor_timeout=True):
-                # request fresh data for max_num_set players IN PARALLEL
-                try:
-                    # get id just in case
-                    if 'osu_id' in player:
-                        osu_id = player['osu_id']
-                    else:
-                        osu_id = player['userinfo']['osu']['user_id']
-
-                    #fetch_start = datetime.datetime.now()
-                    new_data = await self._fetch_new(osu_id, gamemode_number) # contains data for all max_num_set players
-                    #fetch_end = datetime.datetime.now()
-                    #print("DATA FETCH TOOK: " + str(fetch_end-fetch_start))
-                    # print("INITIAL LAST CHECK FOR {} {}: ".format(player['username'], mode) + last_top)
-                    best_plays = new_data["best"] # single mode
-                    recent_play = new_data["recent"]
-
-                    best_timestamps = []
-                    for best_play in best_plays:
-                        best_timestamps.append(best_play['date'])
-
-                    top_play_num_tracker = [] # used for pruning
-                    for i in range(len(best_timestamps)): # max 100
-                        last_top = player["last_check"]
-                        last_top_datetime = datetime.datetime.strptime(last_top, '%Y-%m-%d %H:%M:%S')
-                        best_datetime = datetime.datetime.strptime(best_timestamps[i], '%Y-%m-%d %H:%M:%S')
-                        if best_datetime > last_top_datetime:
-                            # print("{} {} {} {} {}".format(player['username'], mode, str(i+1), last_top, best_timestamps[i]))
-                            new_user_info = list(await get_user(key, self.osu_settings["type"]["default"], osu_id, gamemode_number))[0]
-                            top_play_num = i+1
-                            play = best_plays[i]
-                            play_map = await get_beatmap(key, self.osu_settings["type"]["default"], play['beatmap_id'])
-                            # send appropriate message to channel
-                            # log.info("creating top {} {} play for {}".format(top_play_num, mode, player['username']))
-                            if mode in player["userinfo"]:
-                                old_user_info = player["userinfo"][mode]
-                                em = self._create_top_play(top_play_num, play, play_map, old_user_info, new_user_info, score_gamemode)
-                            else:
-                                old_user_info = None
-                                em = self._create_top_play(top_play_num, play, play_map, old_user_info, new_user_info, score_gamemode)
-
-                            # display it to the player with info
-                            deliver_servers = player['servers'].keys()
-                            for server_id in deliver_servers:
-                                try:
-                                    server = find(lambda m: m.id == server_id, self.bot.servers)
-                                    server_settings = db.osu_settings.find_one({"server_id": server_id})
-
-                                    if not server_settings or "tracking" not in server_settings or server_settings["tracking"] == True:
-                                        server_player_info = player['servers'][server_id]
-                                        if 'options' in server_player_info:
-                                            plays_option = server_player_info['options']['plays']
-                                            gamemodes_option = server_player_info['options']['gamemodes']
-                                        if 'options' not in server_player_info or i <= plays_option and  gamemode_number in gamemodes_option:
-                                            channel = find(lambda m: m.id == player['servers'][server_id]["channel"], server.channels)
-                                            await self.bot.send_message(channel, embed = em)
-                                except:
-                                    # log.info("Failed to send to server {}".format(server_id))
-                                    #del player['servers'][server_id]
-                                    #db.track.update_one({"osu_id":osu_id}, {'$set':{"servers":player['servers']}})
-                                    pass
-
-                            # calculate latency
-                            besttime = datetime.datetime.strptime(best_timestamps[i], '%Y-%m-%d %H:%M:%S')
-                            oldlastcheck = datetime.datetime.strptime(last_top, '%Y-%m-%d %H:%M:%S')
-                            delta = besttime.minute - oldlastcheck.minute
-                            if self.cycle_time[gamemode_number] != None and self.cycle_time[gamemode_number].minute >= delta:
-                                if len(self.track_latency) >= 10: # moving average of 10
-                                    del self.track_latency[0]
-                                if delta >= 0:
-                                    self.track_latency.append(delta) # track in minutes
-
-                            # update userinfo for next use
-                            # print("LAST CHECK BEFORE: " + str(player['last_check']))
-                            player["last_check"] = best_timestamps[i]
-                            # save timestamp for most recent top score
-                            db.track.update_one({"osu_id":osu_id}, {'$set':{"userinfo.{}".format(mode):new_user_info}})
-                            db.track.update_one({"osu_id":osu_id}, {'$set':{"last_check":best_timestamps[i]}})
-                            # player_find = db.track.find_one({"osu_id":osu_id})
-                            # print("LAST CHECK AFTER: " + str(player_find['last_check']))
-                except:
-                    # log.info("Failed to load {} top scores for {}".format(mode, player['username']))
-                    pass
+                loop.create_task(self.player_tracker(player))
+                await asyncio.sleep(.8)
 
             loop_time = datetime.datetime.now()
             elapsed_time = loop_time - current_time
-            print("Time ended for {}:".format(mode) + str(elapsed_time))
-            self.cycle_time[gamemode_number] = elapsed_time
+            print("Time ended: " + str(elapsed_time))
+            self.cycle_time = str(elapsed_time)
+            await asyncio.sleep(1)
 
-            await asyncio.sleep(1) # quick pause
-
-    async def _fetch_new(self, osu_id, mode:int):
+    # used to track top plays of specified users (someone please make this better c:)
+    # Previous failed attempts include exponential blocking, using a single client session (unreliable),
+    # threading/request to update info and then displaying separately, aiohttp to update and then displaying separately
+    async def player_tracker(self, player):
         key = self.osu_api_key["osu_api_key"]
-        new_data = {}
-        new_data["best"] = await get_user_best(key, self.osu_settings["type"]["default"], osu_id, mode, self.osu_settings["num_track"])
-        new_data["recent"] = await get_user_recent(key, self.osu_settings["type"]["default"], osu_id, mode)
+
+        # get id
+        if 'osu_id' in player:
+            osu_id = player['osu_id']
+        else:
+            osu_id = player['userinfo']['osu']['user_id']
+
+        try:
+            new_data = await self._fetch_new(osu_id) # contains data for player
+
+            for mode in modes:
+                gamemode_number = self._get_gamemode_number(mode)
+                score_gamemode = self._get_gamemode_display(mode)
+                new_user_info = list(await get_user(key, self.osu_settings["type"]["default"], osu_id, gamemode_number))
+                if not new_user_info:
+                    break
+                else:
+                    new_user_info = new_user_info[0]
+
+
+                best_plays = new_data["best"][mode] # single mode
+                recent_play = new_data["recent"][mode]
+
+                best_timestamps = []
+                for best_play in best_plays:
+                    best_timestamps.append(best_play['date'])
+
+                top_play_num_tracker = [] # used for pruning
+                for i in range(len(best_timestamps)): # max 100
+                    last_top = player["last_check"]
+                    last_top_datetime = datetime.datetime.strptime(last_top, '%Y-%m-%d %H:%M:%S')
+                    best_datetime = datetime.datetime.strptime(best_timestamps[i], '%Y-%m-%d %H:%M:%S')
+                    if best_datetime > last_top_datetime:
+                        top_play_num = i+1
+                        play = best_plays[i]
+                        play_map = await get_beatmap(key, self.osu_settings["type"]["default"], play['beatmap_id'])
+                        # send appropriate message to channel
+                        if mode in player["userinfo"]:
+                            old_user_info = player["userinfo"][mode]
+                            em = self._create_top_play(top_play_num, play, play_map, old_user_info, new_user_info, score_gamemode)
+                        else:
+                            old_user_info = None
+                            em = self._create_top_play(top_play_num, play, play_map, old_user_info, new_user_info, score_gamemode)
+
+                        # display it to the player with info
+                        deliver_servers = player['servers'].keys()
+                        for server_id in deliver_servers:
+                            try:
+                                server = find(lambda m: m.id == server_id, self.bot.servers)
+                                server_settings = db.osu_settings.find_one({"server_id": server_id})
+
+                                if not server_settings or "tracking" not in server_settings or server_settings["tracking"] == True:
+                                    server_player_info = player['servers'][server_id]
+                                    if 'options' in server_player_info:
+                                        plays_option = server_player_info['options']['plays']
+                                        gamemodes_option = server_player_info['options']['gamemodes']
+                                    if 'options' not in server_player_info or i <= plays_option and  gamemode_number in gamemodes_option:
+                                        channel = find(lambda m: m.id == player['servers'][server_id]["channel"], server.channels)
+                                        await self.bot.send_message(channel, embed = em)
+                            except:
+                                # log.info("Failed to send to server {}".format(server_id))
+                                #del player['servers'][server_id]
+                                #db.track.update_one({"osu_id":osu_id}, {'$set':{"servers":player['servers']}})
+                                pass
+
+                        # calculate latency
+                        besttime = datetime.datetime.strptime(best_timestamps[i], '%Y-%m-%d %H:%M:%S')
+                        oldlastcheck = datetime.datetime.strptime(last_top, '%Y-%m-%d %H:%M:%S')
+                        delta = besttime.minute - oldlastcheck.minute
+
+                        log.info("Created top {} {} play for {} | {}".format(top_play_num, mode, player['username'], str(besttime - oldlastcheck)))
+
+                        if len(self.track_latency) >= 10: # moving average of 10
+                            del self.track_latency[0]
+                        if delta >= 0:
+                            self.track_latency.append(delta) # track in minutes
+
+                        # update userinfo for next use
+                        # print("LAST CHECK BEFORE: " + str(player['last_check']))
+                        player["last_check"] = best_timestamps[i]
+                        # save timestamp for most recent top score
+                        db.track.update_one({"osu_id":osu_id}, {'$set':{"userinfo.{}".format(mode):new_user_info}})
+                        db.track.update_one({"osu_id":osu_id}, {'$set':{"last_check":best_timestamps[i]}})
+                        # player_find = db.track.find_one({"osu_id":osu_id})
+                        # print("LAST CHECK AFTER: " + str(player_find['last_check']))
+        except:
+            # log.info("Failed to load top scores for {}".format(player['username']))
+            pass
+
+    async def _fetch_new(self, osu_id):
+        key = self.osu_api_key["osu_api_key"]
+        new_data = {"best":{}, "recent":{}}
+
+        for mode in modes:
+            new_data["best"][mode] = await get_user_best(
+                key, self.osu_settings["type"]["default"], osu_id,
+                self._get_gamemode_number(mode), self.osu_settings["num_track"])
+            new_data["recent"][mode] = await get_user_recent(
+                key, self.osu_settings["type"]["default"], osu_id,
+                self._get_gamemode_number(mode))
         return new_data
 
     def _create_top_play(self, top_play_num, play, beatmap, old_user_info, new_user_info, gamemode):
@@ -1484,7 +1493,7 @@ class Osu:
         em.set_author(name="New #{} for {} in {}".format(top_play_num, new_user_info['username'], gamemode), icon_url = profile_url, url = user_url)
 
         info = ""
-        info += "▸ [**__{} [{}]__**]({})       \n".format(beatmap['title'], beatmap['version'], beatmap_url)
+        info += "▸ [**__{} [{}]__**]({})            \n".format(beatmap['title'], beatmap['version'], beatmap_url)
         # calculate bpm and time... MUST clean up.
         if oppai_output and ('DT' in str(mods).upper() or 'HT' in str(mods).upper()):
             if 'DT' in str(mods):
@@ -1800,7 +1809,6 @@ def setup(bot):
 
     n = Osu(bot)
     loop = asyncio.get_event_loop()
-    for mode in modes:
-        loop.create_task(n.play_tracker(mode))
+    loop.create_task(n.play_tracker())
     bot.add_listener(n.find_link, "on_message")
     bot.add_cog(n)

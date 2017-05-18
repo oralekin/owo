@@ -1348,13 +1348,13 @@ class Osu:
             loop = asyncio.get_event_loop()
             for player in db.track.find({}, no_cursor_timeout=True):
                 loop.create_task(self.player_tracker(player))
-                await asyncio.sleep(.8)
+                await asyncio.sleep(.50)
 
             loop_time = datetime.datetime.now()
             elapsed_time = loop_time - current_time
             print("Time ended: " + str(elapsed_time))
             self.cycle_time = str(elapsed_time)
-            await asyncio.sleep(1)
+            await asyncio.sleep(10)
 
     # used to track top plays of specified users (someone please make this better c:)
     # Previous failed attempts include exponential blocking, using a single client session (unreliable),
@@ -1362,11 +1362,18 @@ class Osu:
     async def player_tracker(self, player):
         key = self.osu_api_key["osu_api_key"]
 
-        # get id
+        # get id, either should be the same, but one is backup
         if 'osu_id' in player:
             osu_id = player['osu_id']
         else:
             osu_id = player['userinfo']['osu']['user_id']
+
+        """
+        # create last check just in case it doesn't exist
+        if 'last_check' not in player:
+            print("Creating Last Check for {}".format(player['username']))
+            player['last_check'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            db.track.update_one({"username":player['username']}, {'$set':{"last_check":player['last_check']}})"""
 
         try:
             new_data = await self._fetch_new(osu_id) # contains data for player
@@ -1374,11 +1381,6 @@ class Osu:
             for mode in modes:
                 gamemode_number = self._get_gamemode_number(mode)
                 score_gamemode = self._get_gamemode_display(mode)
-                new_user_info = list(await get_user(key, self.osu_settings["type"]["default"], osu_id, gamemode_number))
-                if not new_user_info:
-                    break
-                else:
-                    new_user_info = new_user_info[0]
 
 
                 best_plays = new_data["best"][mode] # single mode
@@ -1393,10 +1395,18 @@ class Osu:
                     last_top = player["last_check"]
                     last_top_datetime = datetime.datetime.strptime(last_top, '%Y-%m-%d %H:%M:%S')
                     best_datetime = datetime.datetime.strptime(best_timestamps[i], '%Y-%m-%d %H:%M:%S')
-                    if best_datetime > last_top_datetime:
+                    if best_datetime > last_top_datetime: # could just use string...
                         top_play_num = i+1
                         play = best_plays[i]
                         play_map = await get_beatmap(key, self.osu_settings["type"]["default"], play['beatmap_id'])
+                        new_user_info = list(await get_user(key, self.osu_settings["type"]["default"], osu_id, gamemode_number))
+
+                        if new_user_info != None and len(new_user_info) > 0 and new_user_info[0]['pp_raw'] != None:
+                            new_user_info = new_user_info[0]
+                        else:
+                            print(player["username"] + "({})".format(osu_id) + " has not played enough.")
+                            return
+
                         # send appropriate message to channel
                         if mode in player["userinfo"]:
                             old_user_info = player["userinfo"][mode]
@@ -1431,7 +1441,7 @@ class Osu:
                         oldlastcheck = datetime.datetime.strptime(last_top, '%Y-%m-%d %H:%M:%S')
                         delta = besttime.minute - oldlastcheck.minute
 
-                        log.info("Created top {} {} play for {} | {}".format(top_play_num, mode, player['username'], str(besttime - oldlastcheck)))
+                        log.info("Created top {} {} play for {}({}) | {}".format(top_play_num, mode, new_user_info['username'], osu_id, str(besttime - oldlastcheck)))
 
                         if len(self.track_latency) >= 10: # moving average of 10
                             del self.track_latency[0]
@@ -1442,8 +1452,12 @@ class Osu:
                         # print("LAST CHECK BEFORE: " + str(player['last_check']))
                         player["last_check"] = best_timestamps[i]
                         # save timestamp for most recent top score
-                        db.track.update_one({"osu_id":osu_id}, {'$set':{"userinfo.{}".format(mode):new_user_info}})
-                        db.track.update_one({"osu_id":osu_id}, {'$set':{"last_check":best_timestamps[i]}})
+                        if player['username'] != new_user_info['username']:
+                            print("Username updated from {} to {}".format(player['username'], new_user_info['username']))
+                            db.track.update_one({"username":player['username']}, {'$set':{"username":new_user_info['username']}})
+                            player['username'] = new_user_info['username']
+                        db.track.update_one({"username":player['username']}, {'$set':{"userinfo.{}".format(mode):new_user_info}})
+                        db.track.update_one({"username":player['username']}, {'$set':{"last_check":best_timestamps[i]}})
                         # player_find = db.track.find_one({"osu_id":osu_id})
                         # print("LAST CHECK AFTER: " + str(player_find['last_check']))
         except:

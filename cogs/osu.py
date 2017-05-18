@@ -1376,8 +1376,8 @@ class Osu:
             db.track.update_one({"username":player['username']}, {'$set':{"last_check":player['last_check']}})"""
 
         try:
-            new_data = await self._fetch_new(osu_id) # contains data for player
 
+            new_data = await self._fetch_new(osu_id) # contains data for player
             for mode in modes:
                 gamemode_number = self._get_gamemode_number(mode)
                 score_gamemode = self._get_gamemode_display(mode)
@@ -1416,13 +1416,12 @@ class Osu:
                             em = self._create_top_play(top_play_num, play, play_map, old_user_info, new_user_info, score_gamemode)
 
                         # display it to the player with info
-                        deliver_servers = player['servers'].keys()
-                        for server_id in deliver_servers:
+                        all_servers = player['servers'].keys()
+                        for server_id in all_servers:
+                            server = find(lambda m: m.id == server_id, self.bot.servers)
+                            server_settings = db.osu_settings.find_one({"server_id": server_id})
                             try:
-                                server = find(lambda m: m.id == server_id, self.bot.servers)
-                                server_settings = db.osu_settings.find_one({"server_id": server_id})
-
-                                if not server_settings or "tracking" not in server_settings or server_settings["tracking"] == True:
+                                if server and (not server_settings or "tracking" not in server_settings or server_settings["tracking"] == True):
                                     server_player_info = player['servers'][server_id]
                                     if 'options' in server_player_info:
                                         plays_option = server_player_info['options']['plays']
@@ -1431,9 +1430,6 @@ class Osu:
                                         channel = find(lambda m: m.id == player['servers'][server_id]["channel"], server.channels)
                                         await self.bot.send_message(channel, embed = em)
                             except:
-                                # log.info("Failed to send to server {}".format(server_id))
-                                #del player['servers'][server_id]
-                                #db.track.update_one({"osu_id":osu_id}, {'$set':{"servers":player['servers']}})
                                 pass
 
                         # calculate latency
@@ -1458,8 +1454,13 @@ class Osu:
                             player['username'] = new_user_info['username']
                         db.track.update_one({"username":player['username']}, {'$set':{"userinfo.{}".format(mode):new_user_info}})
                         db.track.update_one({"username":player['username']}, {'$set':{"last_check":best_timestamps[i]}})
-                        # player_find = db.track.find_one({"osu_id":osu_id})
+                        player_find = db.track.find_one({"username":player['username']})
+
+                        """
                         # print("LAST CHECK AFTER: " + str(player_find['last_check']))
+                        if player_find['username'] in ['kablaze', '-Vid', 'Misery', 'ItsWinter']:
+                            write_string = "{}\n{}\n{}\nSERVERS:{}".format(str(player_find),str(player_find['username']), str(player_find['last_check']), str(player_find['servers']))
+                            print(write_string)"""
         except:
             # log.info("Failed to load top scores for {}".format(player['username']))
             pass
@@ -1507,7 +1508,7 @@ class Osu:
         em.set_author(name="New #{} for {} in {}".format(top_play_num, new_user_info['username'], gamemode), icon_url = profile_url, url = user_url)
 
         info = ""
-        info += "▸ [**__{} [{}]__**]({})            \n".format(beatmap['title'], beatmap['version'], beatmap_url)
+        info += "▸ [**__{} [{}]__**]({})                    \n".format(beatmap['title'], beatmap['version'], beatmap_url)
         # calculate bpm and time... MUST clean up.
         if oppai_output and ('DT' in str(mods).upper() or 'HT' in str(mods).upper()):
             if 'DT' in str(mods):

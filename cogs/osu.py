@@ -575,6 +575,7 @@ class Osu:
                 timestamps.append(datetime.datetime.strptime(tag.contents[0].strip().replace(" UTC", ""), '%Y-%m-%d %H:%M:%S'))
             timeago = _time_ago(datetime.datetime.now(), timestamps[1])
             time_ago = "Last Logged in {} ago".format(timeago)
+            em.set_footer(text=time_ago)
         else:
             em.set_footer(text = "On osu! {} Server".format(self._get_api_name(api)))
 

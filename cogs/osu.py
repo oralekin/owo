@@ -573,20 +573,8 @@ class Osu:
             timestamps = []
             for tag in soup.findAll(attrs={'class': 'timeago'}):
                 timestamps.append(datetime.datetime.strptime(tag.contents[0].strip().replace(" UTC", ""), '%Y-%m-%d %H:%M:%S'))
-            timeago = datetime.datetime(1,1,1) + (datetime.datetime.now() - timestamps[1])
-            time_ago = "Last Online "
-            if timeago.year-1 != 0:
-                time_ago += "{} Years ".format(timeago.year-1)
-            if timeago.month-1 !=0:
-                time_ago += "{} Months ".format(timeago.month-1)
-            if timeago.day-1 !=0:
-                time_ago += "{} Days ".format(timeago.day-1)
-            if timeago.hour != 0:
-                time_ago += "{} Hours ".format(timeago.hour)
-            if timeago.minute != 0:
-                time_ago += "{} Minutes ".format(timeago.minute)
-            time_ago += "{} Seconds ago".format(timeago.second)
-            em.set_footer(text=time_ago)
+            timeago = _time_ago(datetime.datetime.now(), timestamps[1])
+            time_ago = "Last Logged in {} ago".format(timeago)
         else:
             em.set_footer(text = "On osu! {} Server".format(self._get_api_name(api)))
 
@@ -650,7 +638,8 @@ class Osu:
         em = discord.Embed(description=info, colour=server_user.colour)
         em.set_author(name="{} [{}] +{}".format(beatmap['title'], beatmap['version'], self._fix_mods(''.join(mods))), url = beatmap_url, icon_url = profile_url)
         em.set_thumbnail(url=map_image_url)
-        em.set_footer(text = "{} On osu! {} Server".format(userrecent['date'], self._get_api_name(api)))
+        time_ago = _time_ago(datetime.datetime.utcnow() + datetime.timedelta(hours=8), datetime.datetime.strptime(userrecent['date'], '%Y-%m-%d %H:%M:%S'))
+        em.set_footer(text = "{} ago On osu! {} Server".format(time_ago, self._get_api_name(api)))
         return (msg, em)
 
     # Gives a user profile image with some information
@@ -1659,6 +1648,31 @@ async def fetch(url, session):
     else:
         async with session.get(url) as resp:
             return await resp.json()
+
+def _time_ago(time1, time2):
+    time_diff = time1 - time2
+    timeago = datetime.datetime(1,1,1) + time_diff
+    time_limit = 0
+    time_ago = ""
+    if timeago.year-1 != 0:
+        time_ago += "{} Years ".format(timeago.year-1)
+        time_limit = time_limit + 1
+    if timeago.month-1 !=0:
+        time_ago += "{} Months ".format(timeago.month-1)
+        time_limit = time_limit + 1
+    if timeago.day-1 !=0 and not time_limit == 2:
+        time_ago += "{} Days ".format(timeago.day-1)
+        time_limit = time_limit + 1
+    if timeago.hour != 0 and not time_limit == 2:
+        time_ago += "{} Hours ".format(timeago.hour)
+        time_limit = time_limit + 1
+    if timeago.minute != 0 and not time_limit == 2:
+        time_ago += "{} Minutes ".format(timeago.minute)
+        time_limit = time_limit + 1
+    if not time_limit == 2:
+        time_ago += "{} Seconds ago".format(timeago.second)
+    
+    return time_ago
 
 # Written by Jams
 def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None):

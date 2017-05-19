@@ -615,14 +615,15 @@ class Osu:
 
         # calculate potential pp
         pot_pp = ''
+        totalhits = (int(userrecent['count50']) + int(userrecent['count100']) + int(userrecent['count300']) + int(userrecent['countmiss']))
         if userrecent['rank'] == 'F':
-            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[100], mods = int(userrecent['enabled_mods']))
+            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']), completion=totalhits)
             if oppai_output != None:
-                pot_pp = '▸ **PP for FC:** {:.2f}\n'.format(oppai_output['pp'][0])
+                pot_pp = '▸ **No PP ({:.2f}PP for FC)**\n'.format(oppai_output['pp'][0])
         else:
-            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']))
+            oppai_output = get_pyoppai(userrecent['beatmap_id'], combo=int(userrecent['maxcombo']), accs=[float(acc), 100], mods = int(userrecent['enabled_mods']))
             if oppai_output != None:
-                pot_pp = '▸ **PP for FC:** {:.2f}\n'.format(oppai_output['pp'][0])
+                pot_pp = '▸ **{:.2f}PP ({:.2f}PP for FC)**\n'.format(oppai_output['pp'][0], oppai_output['pp'][1])
 
         info += "▸ **Rank:** {} {}▸ **Combo:** {} of {}\n".format(userrecent['rank'], pot_pp, userrecent['maxcombo'], beatmap['max_combo'])
         info += "▸ **Score:** {} ▸ **Misses:** {}\n".format(userrecent['score'], userrecent['countmiss'])

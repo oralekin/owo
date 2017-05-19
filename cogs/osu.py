@@ -615,9 +615,8 @@ class Osu:
 
         # calculate potential pp
         pot_pp = ''
-        totalhits = (int(userrecent['count50']) + int(userrecent['count100']) + int(userrecent['count300']) + int(userrecent['countmiss']))
         if userrecent['rank'] == 'F':
-            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']), completion=totalhits)
+            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']))
             if oppai_output != None:
                 pot_pp = '▸ **No PP ({:.2f}PP for FC)**\n'.format(oppai_output['pp'][0])
         else:

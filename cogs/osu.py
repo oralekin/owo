@@ -50,7 +50,6 @@ class Osu:
         self.max_map_disp = 3
         self.backoff_value = 16
         self.max_requests = 900 # per minute for tracking only
-        self.track_latency = []
         self.server_send_fail = []
         self.cycle_time = 0
 
@@ -158,7 +157,7 @@ class Osu:
         if tracking == "Enabled":
             info += "**▸ Tracking Max (Global):** {}\n".format(self.osu_settings['num_track'])
         info += "**▸ Tracking Total (Global):** {} players\n".format(str(db.track.count()))
-        info += "**▸ Tracking Cycle Time:** {} min".format(str(self.cycle_time))
+        info += "**▸ Tracking Cycle Time:** {:.3f} min".format(float(self.cycle_time))
 
         em.description = info
         await self.bot.say(embed = em)
@@ -1331,8 +1330,9 @@ class Osu:
             await self.bot.say('**Users tracked on `{}` cleared.**'.format(server.name))
 
     async def play_tracker(self):
-        requests_per_user = 4 # without recent (hardcoded)
+        self._remove_duplicates() # runs on startup
 
+        requests_per_user = 4 # without recent (hardcoded)
         while self == self.bot.get_cog('Osu'):
             print("Time Started.")
             total_tracking = db.track.count() # around 1700 for owo
@@ -1358,6 +1358,16 @@ class Osu:
             else:
                 await asyncio.sleep(5) # arbitrarily set
 
+    def _remove_duplicates(self):
+        for player in db.track.find({}, no_cursor_timeout=True):
+            player_find_count = db.track.find({"username":player['username']}).count()
+            if player_find_count == 2:
+                db.track.delete_one({"username":player['username']})
+                print("Deleted One Instance of {}".format(player['username']))
+            elif player_find_count > 2:
+                db.track.delete_many({"username":player['username']})
+                print("Deleted All Instances of {}".format(player['username']))
+
     def _remove_bad_servers(self):
         if self.server_send_fail != []:
             for player in db.track.find({}, no_cursor_timeout=True):
@@ -1366,7 +1376,11 @@ class Osu:
                     if failed_server_id in all_servers:
                         del player['servers'][failed_server_id]
                         db.track.update_one({"username":player['username']}, {'$set':{"servers":player['servers']}})
-                        log.info("Deleting Server {} from {}".format(failed_server_id, player['username']))
+                        find_test = db.track.find_one({"username":player['username']})
+                        if failed_server_id in find_test['servers'].keys():
+                            log.info("FAILED to delete Server {} from {}".format(failed_server_id, player['username']))
+                        else:
+                            log.info("Deleted Server {} from {}".format(failed_server_id, player['username']))
             self.server_send_fail = []
 
 
@@ -1386,7 +1400,7 @@ class Osu:
         if 'last_check' not in player:
             print("Creating Last Check for {}".format(player['username']))
             player['last_check'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            db.track.update_one({"username":player['username']}, {'$set':{"last_check":player['last_check']}})
+            db.track.update_one({"username":player['username']}, {'$set':{"last_check":player['last_check']}}, upsert=True)
 
         # ensures that data is recieved
         got_data = False
@@ -1404,6 +1418,8 @@ class Osu:
         if new_data == None:
             return
 
+        current_time = datetime.datetime.now()
+
         for mode in modes:
             gamemode_number = self._get_gamemode_number(mode)
             score_gamemode = self._get_gamemode_display(mode)
@@ -1420,7 +1436,7 @@ class Osu:
                 last_top = player["last_check"]
                 last_top_datetime = datetime.datetime.strptime(last_top, '%Y-%m-%d %H:%M:%S')
                 best_datetime = datetime.datetime.strptime(best_timestamps[i], '%Y-%m-%d %H:%M:%S')
-                if best_datetime > last_top_datetime: # could just use string...
+                if best_datetime > last_top_datetime: # and (current_time.timetuple().tm_yday - best_datetime.timetuple().tm_yday) <= 1: # could just use string...
                     top_play_num = i+1
                     play = best_plays[i]
                     play_map = await get_beatmap(key, self.osu_settings["type"]["default"], play['beatmap_id'])
@@ -1464,15 +1480,9 @@ class Osu:
                     oldlastcheck = datetime.datetime.strptime(last_top, '%Y-%m-%d %H:%M:%S')
                     delta = besttime.minute - oldlastcheck.minute
 
-                    log.info("Created top {} {} play for {}({}) | {}".format(top_play_num, mode, new_user_info['username'], osu_id, str(besttime - oldlastcheck)))
-
-                    if len(self.track_latency) >= 10: # moving average of 10
-                        del self.track_latency[0]
-                    if delta >= 0:
-                        self.track_latency.append(delta) # track in minutes
+                    log.info("Created top {} {} play for {}({}) | {} {}".format(top_play_num, mode, new_user_info['username'], osu_id, str(besttime), str(oldlastcheck)))
 
                     # update userinfo for next use
-                    # print("LAST CHECK BEFORE: " + str(player['last_check']))
                     player["last_check"] = best_timestamps[i]
                     # save timestamp for most recent top score
                     if player['username'] != new_user_info['username']:
@@ -1481,14 +1491,12 @@ class Osu:
                         player['username'] = new_user_info['username']
                     db.track.update_one({"username":player['username']}, {'$set':{"userinfo.{}".format(mode):new_user_info}})
                     db.track.update_one({"username":player['username']}, {'$set':{"last_check":best_timestamps[i]}})
-                    # player_find = db.track.find_one({"username":player['username']})
-                    # print("Finish Writing.")
 
-                    """
-                    # print("LAST CHECK AFTER: " + str(player_find['last_check']))
-                    if player_find['username'] in ['kablaze', '-Vid', 'Misery', 'ItsWinter']:
-                        write_string = "{}\n{}\n{}\nSERVERS:{}".format(str(player_find),str(player_find['username']), str(player_find['last_check']), str(player_find['servers']))
-                        print(write_string)"""
+                    # if player['username'] in ['Dahcreeper','Mking', 'Badewanne3', 'Nainor', 'ItsWinter','kablaze', 'Asu Nya', 'AlexDark69','dinnozap']:
+                    player_find_count = db.track.find({"username":player['username']}).count()
+                    print("Found {} entries for {}.".format(str(player_find_count), player['username']))
+                    # log.info(str(player_find))
+
         #except:
             # log.info("Failed to load top scores for {}".format(player['username']))
             #pass

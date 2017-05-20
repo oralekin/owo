@@ -685,9 +685,11 @@ class Osu:
                 choke_text += ' _({:.2f}pp for FC)_'.format(oppai_info['pp'][0])
             info += '▸ **Rank:** {} ▸ **PP:** {:.2f}{}\n'.format(userbest[i]['rank'], float(userbest[i]['pp']), choke_text)
             info += '▸ **Score:** {} ▸ **Combo:** x{}/{}\n'.format(userbest[i]['score'], userbest[i]['maxcombo'], best_beatmaps[i]['max_combo'])
-            info += '▸ **Acc:** {:.2f}% ▸ **Stars:** {}★\n\n'.format(
+            info += '▸ **Acc:** {:.2f}% ▸ **Stars:** {}★\n'.format(
                 float(best_acc[i]),
                 self._compare_val(best_beatmaps[i]['difficultyrating'], oppai_info, param = 'stars', dec_places = 2))
+            time_ago = _time_ago(datetime.datetime.utcnow() + datetime.timedelta(hours=8), datetime.datetime.strptime(userbest[i]['date'], '%Y-%m-%d %H:%M:%S'))
+            info += '▸ Score Set {}Ago\n\n'.format(time_ago)
 
             desc += info
         em = discord.Embed(description=desc, colour=server_user.colour)
@@ -1671,7 +1673,7 @@ def _time_ago(time1, time2):
         time_ago += "{} Minutes ".format(timeago.minute)
         time_limit = time_limit + 1
     if not time_limit == 2:
-        time_ago += "{} Seconds ago".format(timeago.second)
+        time_ago += "{} Seconds ".format(timeago.second)
     
     return time_ago
 

@@ -1056,7 +1056,7 @@ class Osu:
             em.set_footer(text = 'Powered by Oppai v0.9.5'.format(oppai_version))
 
         await self.bot.send_message(message.channel, msg, embed = em)
-        
+
     def _time_ago(self, time1, time2):
         time_diff = time1 - time2
         timeago = datetime.datetime(1,1,1) + time_diff
@@ -1079,7 +1079,7 @@ class Osu:
             time_limit = time_limit + 1
         if not time_limit == 2:
             time_ago += "{} Seconds ".format(timeago.second)
-        
+
         return time_ago
 
     # --------------------- Tracking Section -------------------------------
@@ -1510,8 +1510,8 @@ class Osu:
                     db.track.update_one({"username":player['username']}, {'$set':{"last_check":best_timestamps[i]}})
 
                     # if player['username'] in ['Dahcreeper','Mking', 'Badewanne3', 'Nainor', 'ItsWinter','kablaze', 'Asu Nya', 'AlexDark69','dinnozap']:
-                    player_find_count = db.track.find({"username":player['username']}).count()
-                    print("Found {} entries for {}.".format(str(player_find_count), player['username']))
+                    # player_find_count = db.track.find({"username":player['username']}).count()
+                    # print("Found {} entries for {}.".format(str(player_find_count), player['username']))
                     # log.info(str(player_find))
 
         #except:
@@ -1880,7 +1880,7 @@ def setup(bot):
     check_files()
 
     n = Osu(bot)
-    loop = asyncio.get_event_loop()
-    loop.create_task(n.play_tracker())
-    bot.add_listener(n.find_link, "on_message")
+    # loop = asyncio.get_event_loop()
+    # loop.create_task(n.play_tracker())
+    # bot.add_listener(n.find_link, "on_message")
     bot.add_cog(n)

@@ -7,6 +7,7 @@ import random, time, datetime, json
 import aiohttp
 import asyncio
 import pyoppai
+from pippy.beatmap import Beatmap
 import wget
 import re, operator
 import urllib.request
@@ -615,8 +616,9 @@ class Osu:
 
         # calculate potential pp
         pot_pp = ''
+        totalhits = (int(userrecent['count50']) + int(userrecent['count100']) + int(userrecent['count300']) + int(userrecent['countmiss']))
         if userrecent['rank'] == 'F':
-            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']))
+            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']), completion=totalhits)
             if oppai_output != None:
                 pot_pp = '▸ **No PP ({:.2f}PP for FC)**\n'.format(oppai_output['pp'][0])
         else:
@@ -628,6 +630,8 @@ class Osu:
         info += "▸ **Score:** {} ▸ **Misses:** {}\n".format(userrecent['score'], userrecent['countmiss'])
         info += "▸ **Acc:** {:.2f}% ▸ **Stars:** {}★\n".format(round(acc,2),
             self._compare_val(beatmap['difficultyrating'], oppai_output, 'stars', dec_places = 2))
+        if oppai_output['map_completion']:
+            info += "▸ **Map Completion:** {:.2f}%".format(oppai_output['map_completion'])
 
         # grab beatmap image
         page = urllib.request.urlopen(beatmap_url)
@@ -1745,7 +1749,11 @@ def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None):
             'ar': ar,
             'hp': hp
             }
-
+        if completion:
+            try:
+                pyoppai_json['map_completion'] = _map_completion(btmap, completion)
+            except:
+                pass
         os.remove(btmap)
         return pyoppai_json
     except:
@@ -1787,6 +1795,22 @@ def get_pyoppai_multi(url:str):
         acc, pp, aim_pp, speed_pp, acc_pp = pyoppai.pp_calc_acc(ctx, aim, speed, b, acc, mod, combo, 0)
         pp_list.append(pp)
     return pp_list
+
+def _map_completion(btmap, totalhits=0):
+    btmap = open(btmap, 'r').read()
+    btmap = Beatmap(btmap)
+    good = btmap.parse()
+    hitobj = []
+    if totalhits == 0:
+        totalhits = len(btmap.hit_objects)
+    numobj = totalhits - 1
+    num = len(btmap.hit_objects)
+    for objects in btmap.hit_objects:
+        hitobj.append(objects.time)
+    timing = int(hitobj[num - 1]) - int(hitobj[0])
+    point = int(hitobj[numobj]) - int(hitobj[0])
+    map_completion = (point / timing) * 100
+    return map_completion
 
 # Returns the full API request URL using the provided base URL and parameters.
 def build_request(url_params, url):

@@ -618,16 +618,18 @@ class Osu:
         if userrecent['rank'] == 'F':
             oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']))
             if oppai_output != None:
-                pot_pp = '▸ **No PP ({:.2f}PP for FC)**\n'.format(oppai_output['pp'][0])
+                pot_pp = '**No PP ({:.2f}PP for FC)**'.format(oppai_output['pp'][0])
         else:
             oppai_output = get_pyoppai(userrecent['beatmap_id'], combo=int(userrecent['maxcombo']), accs=[float(acc), 100], mods = int(userrecent['enabled_mods']))
             if oppai_output != None:
-                pot_pp = '▸ **{:.2f}PP ({:.2f}PP for FC)**\n'.format(oppai_output['pp'][0], oppai_output['pp'][1])
+                pot_pp = '**{:.2f}PP** ({:.2f}PP for FC)'.format(oppai_output['pp'][0], oppai_output['pp'][1])
 
-        info += "▸ **Rank:** {} {}▸ **Combo:** {} of {}\n".format(userrecent['rank'], pot_pp, userrecent['maxcombo'], beatmap['max_combo'])
-        info += "▸ **Score:** {} ▸ **Misses:** {}\n".format(userrecent['score'], userrecent['countmiss'])
-        info += "▸ **Acc:** {:.2f}% ▸ **Stars:** {}★\n".format(round(acc,2),
-            self._compare_val(beatmap['difficultyrating'], oppai_output, 'stars', dec_places = 2))
+        info += "▸ **{} Rank** ▸ {} ▸ {}%\n".format(userrecent['rank'], pot_pp, round(acc,2))
+        info += "▸ {} ▸ x{}/{} ▸ [{}/{}/{}/{}]\n".format(
+            userrecent['score'],
+            userrecent['maxcombo'], beatmap['max_combo'],
+            userrecent['count300'], userrecent['count100'], userrecent['count50'], userrecent['countmiss'])
+        info += "▸ Completion goes here"
 
         # grab beatmap image
         page = urllib.request.urlopen(beatmap_url)
@@ -636,10 +638,12 @@ class Osu:
         map_image_url = 'http:{}'.format(map_image[0]).replace(" ","%")
 
         em = discord.Embed(description=info, colour=server_user.colour)
-        em.set_author(name="{} [{}] +{}".format(beatmap['title'], beatmap['version'], self._fix_mods(''.join(mods))), url = beatmap_url, icon_url = profile_url)
+        em.set_author(name="{} [{}] +{} [{}★]".format(beatmap['title'], beatmap['version'],
+            self._fix_mods(''.join(mods)),
+            self._compare_val(beatmap['difficultyrating'], oppai_output, 'stars', dec_places = 2, single = True)), url = beatmap_url, icon_url = profile_url)
         em.set_thumbnail(url=map_image_url)
         time_ago = self._time_ago(datetime.datetime.utcnow() + datetime.timedelta(hours=8), datetime.datetime.strptime(userrecent['date'], '%Y-%m-%d %H:%M:%S'))
-        em.set_footer(text = "{} ago On osu! {} Server".format(time_ago, self._get_api_name(api)))
+        em.set_footer(text = "{}Ago On osu! {} Server".format(time_ago, self._get_api_name(api)))
         return (msg, em)
 
     # Gives a user profile image with some information
@@ -653,6 +657,7 @@ class Osu:
         elif api == self.osu_settings["type"]["ripple"]:
             profile_url = 'http://a.ripple.moe/{}.png'.format(user['user_id'])
 
+        flag_url = 'https://new.ppy.sh//images/flags/{}.png'.format(user['country'])
         gamemode_text = self._get_gamemode(gamemode)
 
         # get best plays map information and scores
@@ -665,7 +670,7 @@ class Osu:
             best_acc.append(self.calculate_acc(score,gamemode))
 
         all_plays = []
-        msg = "**Top {} {} Plays for {}:**".format(self.osu_settings['num_best_plays'], gamemode_text, user['username'])
+        msg = ""
         desc = ''
         for i in range(self.osu_settings['num_best_plays']):
             mods = self.num_to_mod(userbest[i]['enabled_mods'])
@@ -677,21 +682,29 @@ class Osu:
             beatmap_url = 'https://osu.ppy.sh/b/{}'.format(best_beatmaps[i]['beatmap_id'])
 
             info = ''
-            info += '**{}. [{} [{}]]({}) +{}\n**'.format(i+1, best_beatmaps[i]['title'], best_beatmaps[i]['version'], beatmap_url, self._fix_mods(''.join(mods)))
+            info += '**{}. [{} [{}]]({}) +{}** [{}★]\n'.format(
+                i+1, best_beatmaps[i]['title'],
+                best_beatmaps[i]['version'], beatmap_url,
+                self._fix_mods(''.join(mods)),
+                self._compare_val(best_beatmaps[i]['difficultyrating'], oppai_info, param = 'stars', dec_places = 2, single = True))
             # choke text
             choke_text = ''
             if (oppai_info != None and userbest[i]['countmiss'] != None and best_beatmaps[i]['max_combo']!= None) and (int(userbest[i]['countmiss'])>=1 or (int(userbest[i]['maxcombo']) <= 0.95*int(best_beatmaps[i]['max_combo']) and 'S' in userbest[i]['rank'])):
                 choke_text += ' _({:.2f}pp for FC)_'.format(oppai_info['pp'][0])
-            info += '▸ **Rank:** {} ▸ **PP:** {:.2f}{}\n'.format(userbest[i]['rank'], float(userbest[i]['pp']), choke_text)
-            info += '▸ **Score:** {} ▸ **Combo:** x{}/{}\n'.format(userbest[i]['score'], userbest[i]['maxcombo'], best_beatmaps[i]['max_combo'])
-            info += '▸ **Acc:** {:.2f}% ▸ **Stars:** {}★\n'.format(
-                float(best_acc[i]),
-                self._compare_val(best_beatmaps[i]['difficultyrating'], oppai_info, param = 'stars', dec_places = 2))
+            info += '▸ **{} Rank** ▸ **{:.2f}pp**{} ▸ {:.2f}%\n'.format(userbest[i]['rank'], float(userbest[i]['pp']), choke_text, float(best_acc[i]))
+            info += '▸ {} ▸ x{}/{} ▸ [{}/{}/{}/{}]\n'.format(
+                userbest[i]['score'],
+                userbest[i]['maxcombo'], best_beatmaps[i]['max_combo'],
+                userbest[i]['count300'],userbest[i]['count100'],userbest[i]['count50'],userbest[i]['countmiss']
+                )
+
             time_ago = self._time_ago(datetime.datetime.utcnow() + datetime.timedelta(hours=8), datetime.datetime.strptime(userbest[i]['date'], '%Y-%m-%d %H:%M:%S'))
-            info += '▸ Score Set {}Ago\n\n'.format(time_ago)
+            info += '▸ Score Set {}Ago\n'.format(time_ago)
 
             desc += info
         em = discord.Embed(description=desc, colour=server_user.colour)
+        title = "Top {} {} Plays for {}".format(self.osu_settings['num_best_plays'], gamemode_text, user['username'])
+        em.set_author(name = title, url="https://osu.ppy.sh/u/{}".format(user['user_id']), icon_url=flag_url)
         em.set_footer(text = "On osu! {} Server".format(self._get_api_name(api)))
         em.set_thumbnail(url=profile_url)
 
@@ -934,15 +947,18 @@ class Osu:
             #except:
                 #pass
 
-    def _compare_val(self, map_stat, omap, param, dec_places:int = 1):
+    def _compare_val(self, map_stat, omap, param, dec_places:int = 1, single = False):
         if not omap:
             return "{}".format(round(float(map_stat), dec_places))
         else:
             map_stat = float(map_stat)
             op_stat = float(omap[param])
             if int(round(op_stat, dec_places)) != 0 and abs(round(map_stat, dec_places) - round(op_stat, dec_places)) > 0.05:
-                return "{}({})".format(round(map_stat, dec_places),
-                    round(op_stat, dec_places))
+                if single:
+                    return "{}".format(round(op_stat, dec_places))
+                else:
+                    return "{}({})".format(round(map_stat, dec_places),
+                        round(op_stat, dec_places))
             else:
                 return "{}".format(round(map_stat, dec_places))
 
@@ -1510,8 +1526,8 @@ class Osu:
                     db.track.update_one({"username":player['username']}, {'$set':{"last_check":best_timestamps[i]}})
 
                     # if player['username'] in ['Dahcreeper','Mking', 'Badewanne3', 'Nainor', 'ItsWinter','kablaze', 'Asu Nya', 'AlexDark69','dinnozap']:
-                    # player_find_count = db.track.find({"username":player['username']}).count()
-                    # print("Found {} entries for {}.".format(str(player_find_count), player['username']))
+                    player_find_count = db.track.find({"username":player['username']}).count()
+                    print("Found {} entries for {}.".format(str(player_find_count), player['username']))
                     # log.info(str(player_find))
 
         #except:

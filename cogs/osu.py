@@ -572,19 +572,8 @@ class Osu:
             timestamps = []
             for tag in soup.findAll(attrs={'class': 'timeago'}):
                 timestamps.append(datetime.datetime.strptime(tag.contents[0].strip().replace(" UTC", ""), '%Y-%m-%d %H:%M:%S'))
-            timeago = datetime.datetime(1,1,1) + (datetime.datetime.now() - timestamps[1])
-            time_ago = "Last Online "
-            if timeago.year-1 != 0:
-                time_ago += "{} Years ".format(timeago.year-1)
-            if timeago.month-1 !=0:
-                time_ago += "{} Months ".format(timeago.month-1)
-            if timeago.day-1 !=0:
-                time_ago += "{} Days ".format(timeago.day-1)
-            if timeago.hour != 0:
-                time_ago += "{} Hours ".format(timeago.hour)
-            if timeago.minute != 0:
-                time_ago += "{} Minutes ".format(timeago.minute)
-            time_ago += "{} Seconds ago".format(timeago.second)
+            timeago = self._time_ago(datetime.datetime.now(), timestamps[1])
+            time_ago = "Last Logged in {} ago".format(timeago)
             em.set_footer(text=time_ago)
         else:
             em.set_footer(text = "On osu! {} Server".format(self._get_api_name(api)))
@@ -627,13 +616,13 @@ class Osu:
         # calculate potential pp
         pot_pp = ''
         if userrecent['rank'] == 'F':
-            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[100], mods = int(userrecent['enabled_mods']))
-            if oppai_output != None:
-                pot_pp = '▸ **PP for FC:** {:.2f}\n'.format(oppai_output['pp'][0])
-        else:
             oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']))
             if oppai_output != None:
-                pot_pp = '▸ **PP for FC:** {:.2f}\n'.format(oppai_output['pp'][0])
+                pot_pp = '▸ **No PP ({:.2f}PP for FC)**\n'.format(oppai_output['pp'][0])
+        else:
+            oppai_output = get_pyoppai(userrecent['beatmap_id'], combo=int(userrecent['maxcombo']), accs=[float(acc), 100], mods = int(userrecent['enabled_mods']))
+            if oppai_output != None:
+                pot_pp = '▸ **{:.2f}PP ({:.2f}PP for FC)**\n'.format(oppai_output['pp'][0], oppai_output['pp'][1])
 
         info += "▸ **Rank:** {} {}▸ **Combo:** {} of {}\n".format(userrecent['rank'], pot_pp, userrecent['maxcombo'], beatmap['max_combo'])
         info += "▸ **Score:** {} ▸ **Misses:** {}\n".format(userrecent['score'], userrecent['countmiss'])
@@ -649,7 +638,8 @@ class Osu:
         em = discord.Embed(description=info, colour=server_user.colour)
         em.set_author(name="{} [{}] +{}".format(beatmap['title'], beatmap['version'], self._fix_mods(''.join(mods))), url = beatmap_url, icon_url = profile_url)
         em.set_thumbnail(url=map_image_url)
-        em.set_footer(text = "{} On osu! {} Server".format(userrecent['date'], self._get_api_name(api)))
+        time_ago = self._time_ago(datetime.datetime.utcnow() + datetime.timedelta(hours=8), datetime.datetime.strptime(userrecent['date'], '%Y-%m-%d %H:%M:%S'))
+        em.set_footer(text = "{} ago On osu! {} Server".format(time_ago, self._get_api_name(api)))
         return (msg, em)
 
     # Gives a user profile image with some information
@@ -694,9 +684,11 @@ class Osu:
                 choke_text += ' _({:.2f}pp for FC)_'.format(oppai_info['pp'][0])
             info += '▸ **Rank:** {} ▸ **PP:** {:.2f}{}\n'.format(userbest[i]['rank'], float(userbest[i]['pp']), choke_text)
             info += '▸ **Score:** {} ▸ **Combo:** x{}/{}\n'.format(userbest[i]['score'], userbest[i]['maxcombo'], best_beatmaps[i]['max_combo'])
-            info += '▸ **Acc:** {:.2f}% ▸ **Stars:** {}★\n\n'.format(
+            info += '▸ **Acc:** {:.2f}% ▸ **Stars:** {}★\n'.format(
                 float(best_acc[i]),
                 self._compare_val(best_beatmaps[i]['difficultyrating'], oppai_info, param = 'stars', dec_places = 2))
+            time_ago = self._time_ago(datetime.datetime.utcnow() + datetime.timedelta(hours=8), datetime.datetime.strptime(userbest[i]['date'], '%Y-%m-%d %H:%M:%S'))
+            info += '▸ Score Set {}Ago\n\n'.format(time_ago)
 
             desc += info
         em = discord.Embed(description=desc, colour=server_user.colour)
@@ -1064,6 +1056,31 @@ class Osu:
             em.set_footer(text = 'Powered by Oppai v0.9.5'.format(oppai_version))
 
         await self.bot.send_message(message.channel, msg, embed = em)
+        
+    def _time_ago(self, time1, time2):
+        time_diff = time1 - time2
+        timeago = datetime.datetime(1,1,1) + time_diff
+        time_limit = 0
+        time_ago = ""
+        if timeago.year-1 != 0:
+            time_ago += "{} Years ".format(timeago.year-1)
+            time_limit = time_limit + 1
+        if timeago.month-1 !=0:
+            time_ago += "{} Months ".format(timeago.month-1)
+            time_limit = time_limit + 1
+        if timeago.day-1 !=0 and not time_limit == 2:
+            time_ago += "{} Days ".format(timeago.day-1)
+            time_limit = time_limit + 1
+        if timeago.hour != 0 and not time_limit == 2:
+            time_ago += "{} Hours ".format(timeago.hour)
+            time_limit = time_limit + 1
+        if timeago.minute != 0 and not time_limit == 2:
+            time_ago += "{} Minutes ".format(timeago.minute)
+            time_limit = time_limit + 1
+        if not time_limit == 2:
+            time_ago += "{} Seconds ".format(timeago.second)
+        
+        return time_ago
 
     # --------------------- Tracking Section -------------------------------
     @osutrack.command(pass_context=True, no_pm=True)

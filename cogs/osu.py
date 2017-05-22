@@ -616,23 +616,26 @@ class Osu:
 
         # calculate potential pp
         pot_pp = ''
-        totalhits = (int(userrecent['count50']) + int(userrecent['count100']) + int(userrecent['count300']) + int(userrecent['countmiss']))
         if userrecent['rank'] == 'F':
+            totalhits = (int(userrecent['count50']) + int(userrecent['count100']) + int(userrecent['count300']) + int(userrecent['countmiss']))
             oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']), completion=totalhits)
             if oppai_output != None:
-                pot_pp = '▸ **No PP ({:.2f}PP for FC)**\n'.format(oppai_output['pp'][0])
+                pot_pp = '**No PP ({:.2f}PP for FC)**'.format(oppai_output['pp'][0])
         else:
             oppai_output = get_pyoppai(userrecent['beatmap_id'], combo=int(userrecent['maxcombo']), accs=[float(acc), 100], mods = int(userrecent['enabled_mods']))
             if oppai_output != None:
-                pot_pp = '▸ **{:.2f}PP ({:.2f}PP for FC)**\n'.format(oppai_output['pp'][0], oppai_output['pp'][1])
+                pot_pp = '**{:.2f}PP** ({:.2f}PP for FC)'.format(oppai_output['pp'][0], oppai_output['pp'][1])
 
         info += "▸ **{} Rank** ▸ {} ▸ {}%\n".format(userrecent['rank'], pot_pp, round(acc,2))
         info += "▸ {} ▸ x{}/{} ▸ [{}/{}/{}/{}]\n".format(
             userrecent['score'],
             userrecent['maxcombo'], beatmap['max_combo'],
             userrecent['count300'], userrecent['count100'], userrecent['count50'], userrecent['countmiss'])
-        if oppai_output['map_completion']:
-            info += "▸ **Map Completion:** {:.2f}%".format(oppai_output['map_completion'])
+        if userrecent['rank'] == 'F':
+            try:
+                info += "▸ **Map Completion:** {:.2f}%".format(oppai_output['map_completion'])
+            except:
+                pass
 
         # grab beatmap image
         page = urllib.request.urlopen(beatmap_url)
@@ -646,7 +649,7 @@ class Osu:
             self._compare_val(beatmap['difficultyrating'], oppai_output, 'stars', dec_places = 2, single = True)), url = beatmap_url, icon_url = profile_url)
         em.set_thumbnail(url=map_image_url)
         time_ago = self._time_ago(datetime.datetime.utcnow() + datetime.timedelta(hours=8), datetime.datetime.strptime(userrecent['date'], '%Y-%m-%d %H:%M:%S'))
-        em.set_footer(text = "{} ago On osu! {} Server".format(time_ago, self._get_api_name(api)))
+        em.set_footer(text = "{}Ago On osu! {} Server".format(time_ago, self._get_api_name(api)))
         return (msg, em)
 
     # Gives a user profile image with some information
@@ -964,7 +967,6 @@ class Osu:
                         round(op_stat, dec_places))
             else:
                 return "{}".format(round(map_stat, dec_places))
-
 
     def _calc_time(self, total_sec, bpm, factor:float=1):
         m1, s1 = divmod(round(float(total_sec)/factor), 60)
@@ -1530,8 +1532,8 @@ class Osu:
                     db.track.update_one({"username":player['username']}, {'$set':{"last_check":best_timestamps[i]}})
 
                     # if player['username'] in ['Dahcreeper','Mking', 'Badewanne3', 'Nainor', 'ItsWinter','kablaze', 'Asu Nya', 'AlexDark69','dinnozap']:
-                    # player_find_count = db.track.find({"username":player['username']}).count()
-                    # print("Found {} entries for {}.".format(str(player_find_count), player['username']))
+                    player_find_count = db.track.find({"username":player['username']}).count()
+                    print("Found {} entries for {}.".format(str(player_find_count), player['username']))
                     # log.info(str(player_find))
 
         #except:
@@ -1765,11 +1767,13 @@ def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion
             'ar': ar,
             'hp': hp
             }
+
         if completion:
             try:
-                pyoppai_json['map_completion'] = _map_completion(btmap, completion)
+                pyoppai_json['map_completion'] = _map_completion(btmap, int(completion))
             except:
                 pass
+
         os.remove(btmap)
         return pyoppai_json
     except:
@@ -1816,6 +1820,10 @@ def _map_completion(btmap, totalhits=0):
     btmap = open(btmap, 'r').read()
     btmap = Beatmap(btmap)
     good = btmap.parse()
+    if not good:
+        raise ValueError("Beatmap verify failed. "
+                         "Either beatmap is not for osu! standart, or it's malformed")
+        return
     hitobj = []
     if totalhits == 0:
         totalhits = len(btmap.hit_objects)

@@ -1,5 +1,5 @@
 # owo - An osu! Discord bot
-This is owo, an instance of Red, an open source Discord bot created by [Twentysix](https://travis-ci.org/Twentysix26/Red-DiscordBot) and modified by Stevy for the specific purpose of Osu!.
+This is owo, an instance of Red, an open source Discord bot created by [Twentysix](https://github.com/Twentysix26/Red-DiscordBot) and modified by Stevy for the specific purpose of Osu!.
 
 Key Features include:
 - User profiles
@@ -10,7 +10,7 @@ Key Features include:
 
 You can add the bot using this [link](https://discordapp.com/oauth2/authorize?client_id=289066747443675143&scope=bot) or join the owo server [here](https://discord.gg/aNKde73).
 
-If you would like to run your own instance of owo because tracking is getting too slow or some other reason, please follow the instructions provided by [Twentysix](https://travis-ci.org/Twentysix26/Red-DiscordBot) and others on how to install a Redbot for your system. Then, getting this to work should make more sense. If you're having issues with `leveler.py` and/or `osu.py`, be sure you read up on [my cog repo](https://github.com/AznStevy/Maybe-Useful-Cogs) on how to install those two cogs. Have fun! If you have questions/need help, ask in the [owo! Official](https://discord.gg/aNKde73) server.
+If you would like to run your own instance of owo because tracking is getting too slow or some other reason, please follow the instructions provided by [Twentysix](https://twentysix26.github.io/Red-Docs/) and others on how to install a Redbot for your system. Then, getting this to work should make more sense. If you're having issues with `leveler.py` and/or `osu.py`, be sure you read up on [my cog repo](https://github.com/AznStevy/Maybe-Useful-Cogs) on how to install those two cogs. Have fun! If you have questions/need help, ask in the [owo! Official](https://discord.gg/aNKde73) server.
 
 Command List:
 

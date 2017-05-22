@@ -30,7 +30,7 @@ Command List:
 | `osuset api [official/ripple]` | Set the default api to use for the server for the commands above |
 | `osuset default [0/1/2/3]` | Set a users default gamemode to use for recent command |
 | `osuset displaytop [#]` | Set # of best plays being displayed in top command  |
-| `osuset key [key]` | Set api key **Must do this first for anything to work!** |
+| `osuset key [key]` | Set api key **Must do this first for anything to work!** You can get one here: https://osu.ppy.sh/p/api|
 | `osuset tracking [enable/disable]` | Disable/Enable tracking on server |
 | `osuset user [username]` | Links username to discord account |
 | --- | --- |

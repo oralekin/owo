@@ -950,17 +950,21 @@ class Osu:
             #except:
                 #pass
 
-    def _compare_val(self, map_stat, omap, param, dec_places:int = 1):
+    def _compare_val(self, map_stat, omap, param, dec_places:int = 1, single = False):
         if not omap:
             return "{}".format(round(float(map_stat), dec_places))
         else:
             map_stat = float(map_stat)
             op_stat = float(omap[param])
             if int(round(op_stat, dec_places)) != 0 and abs(round(map_stat, dec_places) - round(op_stat, dec_places)) > 0.05:
-                return "{}({})".format(round(map_stat, dec_places),
-                    round(op_stat, dec_places))
+                if single:
+                    return "{}".format(round(op_stat, dec_places))
+                else:
+                    return "{}({})".format(round(map_stat, dec_places),
+                        round(op_stat, dec_places))
             else:
                 return "{}".format(round(map_stat, dec_places))
+
 
     def _calc_time(self, total_sec, bpm, factor:float=1):
         m1, s1 = divmod(round(float(total_sec)/factor), 60)

@@ -620,7 +620,7 @@ class Osu:
             totalhits = (int(userrecent['count50']) + int(userrecent['count100']) + int(userrecent['count300']) + int(userrecent['countmiss']))
             oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']), completion=totalhits)
             if oppai_output != None:
-                pot_pp = '**No PP ({:.2f}PP for FC)**'.format(oppai_output['pp'][0])
+                pot_pp = '**No PP** ({:.2f}PP for FC)'.format(oppai_output['pp'][0])
         else:
             oppai_output = get_pyoppai(userrecent['beatmap_id'], combo=int(userrecent['maxcombo']), accs=[float(acc), 100], mods = int(userrecent['enabled_mods']))
             if oppai_output != None:
@@ -1085,24 +1085,30 @@ class Osu:
         time_limit = 0
         time_ago = ""
         if timeago.year-1 != 0:
-            time_ago += "{} Years ".format(timeago.year-1)
+            time_ago += "{} Year{} ".format(timeago.year-1, self._determine_plural(timeago.year-1))
             time_limit = time_limit + 1
         if timeago.month-1 !=0:
-            time_ago += "{} Months ".format(timeago.month-1)
+            time_ago += "{} Month{} ".format(timeago.month-1, self._determine_plural(timeago.month-1))
             time_limit = time_limit + 1
         if timeago.day-1 !=0 and not time_limit == 2:
-            time_ago += "{} Days ".format(timeago.day-1)
+            time_ago += "{} Day{} ".format(timeago.day-1, self._determine_plural(timeago.day-1))
             time_limit = time_limit + 1
         if timeago.hour != 0 and not time_limit == 2:
-            time_ago += "{} Hours ".format(timeago.hour)
+            time_ago += "{} Hour{} ".format(timeago.hour, self._determine_plural(timeago.hour))
             time_limit = time_limit + 1
         if timeago.minute != 0 and not time_limit == 2:
-            time_ago += "{} Minutes ".format(timeago.minute)
+            time_ago += "{} Minute{} ".format(timeago.minute, self._determine_plural(timeago.minute))
             time_limit = time_limit + 1
         if not time_limit == 2:
-            time_ago += "{} Seconds ".format(timeago.second)
-
+            time_ago += "{} Second{} ".format(timeago.second, self._determine_plural(timeago.second))
         return time_ago
+
+    # really stevy? yes, really.
+    def _determine_plural(self, number):
+        if int(number) != 1:
+            return 's'
+        else:
+            return ''
 
     # --------------------- Tracking Section -------------------------------
     @osutrack.command(pass_context=True, no_pm=True)
@@ -1532,8 +1538,8 @@ class Osu:
                     db.track.update_one({"username":player['username']}, {'$set':{"last_check":best_timestamps[i]}})
 
                     # if player['username'] in ['Dahcreeper','Mking', 'Badewanne3', 'Nainor', 'ItsWinter','kablaze', 'Asu Nya', 'AlexDark69','dinnozap']:
-                    player_find_count = db.track.find({"username":player['username']}).count()
-                    print("Found {} entries for {}.".format(str(player_find_count), player['username']))
+                    # player_find_count = db.track.find({"username":player['username']}).count()
+                    # print("Found {} entries for {}.".format(str(player_find_count), player['username']))
                     # log.info(str(player_find))
 
         #except:

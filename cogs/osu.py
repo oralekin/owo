@@ -235,6 +235,23 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def osutop(self, ctx, *username):
         """[p]osutop username [-ripple|-official]"""
+        try:
+            if username[0].lower() == "-p":
+                username = list(username)
+                username.pop(0)
+                try:
+                    score = int(username.pop(0))
+                except ValueError:
+                    await self.bot.say("Usage is `[p]osutop -p number username`")
+                    return
+                username = tuple(username)
+                if score > 100:
+                    await self.bot.say("Score has to be 1-100")
+                    return
+                await self._process_user_top(ctx, username, 0, spec=score)
+                return
+        except:
+            pass
         await self._process_user_top(ctx, username, 0)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -245,6 +262,23 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def taikotop(self, ctx, *username):
         """[p]taikotop username [-ripple|-official]"""
+        try:
+            if username[0].lower() == "-p":
+                username = list(username)
+                username.pop(0)
+                try:
+                    score = int(username.pop(0))
+                except ValueError:
+                    await self.bot.say("Usage is `[p]osutop -p number username`")
+                    return
+                username = tuple(username)
+                if score > 100:
+                    await self.bot.say("Score has to be 1-100")
+                    return
+                await self._process_user_top(ctx, username, 1, spec=score)
+                return
+        except:
+            pass
         await self._process_user_top(ctx, username, 1)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -255,6 +289,23 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def ctbtop(self, ctx, *username):
         """[p]ctbtop username [-ripple|-official]"""
+        try:
+            if username[0].lower() == "-p":
+                username = list(username)
+                username.pop(0)
+                try:
+                    score = int(username.pop(0))
+                except ValueError:
+                    await self.bot.say("Usage is `[p]osutop -p number username`")
+                    return
+                username = tuple(username)
+                if score > 100:
+                    await self.bot.say("Score has to be 1-100")
+                    return
+                await self._process_user_top(ctx, username, 2, spec=score)
+                return
+        except:
+            pass
         await self._process_user_top(ctx, username, 2)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -265,6 +316,23 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def maniatop(self, ctx, *username):
         """[p]maniatop username [-ripple|-official]"""
+        try:
+            if username[0].lower() == "-p":
+                username = list(username)
+                username.pop(0)
+                try:
+                    score = int(username.pop(0))
+                except ValueError:
+                    await self.bot.say("Usage is `[p]osutop -p number username`")
+                    return
+                username = tuple(username)
+                if score > 100:
+                    await self.bot.say("Score has to be 1-100")
+                    return
+                await self._process_user_top(ctx, username, 3, spec=score)
+                return
+        except:
+            pass
         await self._process_user_top(ctx, username, 3)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -453,7 +521,7 @@ class Osu:
         return -1
 
     # Gets information to proccess the top play version of the image
-    async def _process_user_top(self, ctx, username, gamemode: int):
+    async def _process_user_top(self, ctx, username, gamemode: int, spec:int=None):
         key = self.osu_api_key["osu_api_key"]
         channel = ctx.message.channel
         user = ctx.message.author
@@ -470,14 +538,28 @@ class Osu:
         else:
             return
 
-        # get userinfo
-        userinfo = list(await get_user(key, api, username, gamemode))
-        userbest = list(await get_user_best(key, api, username, gamemode, self.osu_settings['num_best_plays']))
-        if userinfo and userbest:
-            msg, top_plays = await self._get_user_top(ctx, api, userinfo[0], userbest, gamemode)
-            await self.bot.say(msg, embed=top_plays)
+        if not spec:
+            # for getting top plays
+            userinfo = list(await get_user(key, api, username, gamemode))
+            userbest = list(await get_user_best(key, api, username, gamemode, self.osu_settings['num_best_plays']))
+            if userinfo and userbest:
+                msg, top_plays = await self._get_user_top(ctx, api, userinfo[0], userbest, gamemode)
+                await self.bot.say(msg, embed=top_plays)
+            else:
+                await self.bot.say("**`{}` was not found or not enough plays.**".format(username))
         else:
-            await self.bot.say("**`{}` was not found or not enough plays.**".format(username))
+            # for a specific score in top 100
+            userinfo = list(await get_user(key, api, username, gamemode))
+            userbest = list(await get_user_best(key, api, username, gamemode, spec))
+            # check if user has enough scores for that number
+            if not spec <= len(userbest):
+                await self.bot.say("**`{}` does not have enough plays.**".format(username))
+                return
+            if userinfo and userbest:                          
+                msg, score_play = await self._get_top_num(ctx, api, userinfo[0], userbest, spec, gamemode)
+                await self.bot.say(msg, embed=score_play)
+            else:
+                await self.bot.say("**`{}` was not found or not enough plays.**".format(username))
 
     ## processes username. probably the worst chunck of code in this project so far. will fix/clean later
     async def _process_username(self, ctx, username):
@@ -710,6 +792,72 @@ class Osu:
             desc += info
         em = discord.Embed(description=desc, colour=server_user.colour)
         title = "Top {} {} Plays for {}".format(self.osu_settings['num_best_plays'], gamemode_text, user['username'])
+        em.set_author(name = title, url="https://osu.ppy.sh/u/{}".format(user['user_id']), icon_url=flag_url)
+        em.set_footer(text = "On osu! {} Server".format(self._get_api_name(api)))
+        em.set_thumbnail(url=profile_url)
+
+        return (msg, em)
+
+    async def _get_top_num(self, ctx, api, user, userbest, num_score, gamemode:int):
+        server_user = ctx.message.author
+        server = ctx.message.server
+        key = self.osu_api_key["osu_api_key"]
+
+        if api == self.osu_settings["type"]["default"]:
+            profile_url = 'http://s.ppy.sh/a/{}.png'.format(user['user_id'])
+        elif api == self.osu_settings["type"]["ripple"]:
+            profile_url = 'http://a.ripple.moe/{}.png'.format(user['user_id'])
+
+        flag_url = 'https://new.ppy.sh//images/flags/{}.png'.format(user['country'])
+        gamemode_text = self._get_gamemode(gamemode)
+
+
+        # get best plays map information and scores
+        num_score = int(num_score) - 1
+        beatmap = list(await get_beatmap(key, api, beatmap_id=userbest[num_score]['beatmap_id']))[0]
+        score = list(await get_scores(key, api, userbest[num_score]['beatmap_id'], user['user_id'], gamemode))[0]
+        best_beatmaps = [beatmap]
+        best_acc = [self.calculate_acc(score,gamemode)]
+        
+        msg = "**{}'s #{} Top {} Play on {} server:**".format(user['username'], num_score+1, gamemode_text, self._get_api_name(api))
+        title = best_beatmaps[0]['title']
+        if '*' in title:
+            title = title.replace('*', ' ')
+        mods = self.num_to_mod(userbest[num_score]['enabled_mods'])
+        if not mods:
+            mods = ['No Mod']
+        beatmap_url = 'https://osu.ppy.sh/b/{}'.format(best_beatmaps[0]['beatmap_id'])
+
+        mods = self.num_to_mod(userbest[num_score]['enabled_mods'])
+        oppai_info = get_pyoppai(best_beatmaps[0]['beatmap_id'], accs = [float(best_acc[0])], mods = int(userbest[num_score]['enabled_mods']))
+
+        if not mods:
+            mods = []
+            mods.append('No Mod')
+        beatmap_url = 'https://osu.ppy.sh/b/{}'.format(best_beatmaps[0]['beatmap_id'])
+
+        info = ''
+        info += '**[{} [{}]]({}) +{}** [{}★]\n'.format(
+            best_beatmaps[0]['title'],
+            best_beatmaps[0]['version'], beatmap_url,
+            self._fix_mods(''.join(mods)),
+            self._compare_val(best_beatmaps[0]['difficultyrating'], oppai_info, param = 'stars', dec_places = 2, single = True))
+        # choke text
+        choke_text = ''
+        if (oppai_info != None and userbest[num_score]['countmiss'] != None and best_beatmaps[0]['max_combo']!= None) and (int(userbest[num_score]['countmiss'])>=1 or (int(userbest[num_score]['maxcombo']) <= 0.95*int(best_beatmaps[0]['max_combo']) and 'S' in userbest[num_score]['rank'])):
+            choke_text += ' _({:.2f}pp for FC)_'.format(oppai_info['pp'][0])
+        info += '▸ **{} Rank** ▸ **{:.2f}pp**{} ▸ {:.2f}%\n'.format(userbest[num_score]['rank'], float(userbest[num_score]['pp']), choke_text, float(best_acc[0]))
+        info += '▸ {} ▸ x{}/{} ▸ [{}/{}/{}/{}]\n'.format(
+            userbest[num_score]['score'],
+            userbest[num_score]['maxcombo'], best_beatmaps[0]['max_combo'],
+            userbest[num_score]['count300'],userbest[num_score]['count100'],userbest[num_score]['count50'],userbest[num_score]['countmiss']
+            )
+
+        time_ago = self._time_ago(datetime.datetime.utcnow() + datetime.timedelta(hours=8), datetime.datetime.strptime(userbest[num_score]['date'], '%Y-%m-%d %H:%M:%S'))
+        info += '▸ Score Set {}Ago\n'.format(time_ago)
+
+        em = discord.Embed(description=info, colour=server_user.colour)
+        title = "Top {} {} Play for {}".format(num_score+1, gamemode_text, user['username'])
         em.set_author(name = title, url="https://osu.ppy.sh/u/{}".format(user['user_id']), icon_url=flag_url)
         em.set_footer(text = "On osu! {} Server".format(self._get_api_name(api)))
         em.set_thumbnail(url=profile_url)

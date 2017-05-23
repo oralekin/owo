@@ -235,20 +235,23 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def osutop(self, ctx, *username):
         """[p]osutop username [-ripple|-official]"""
-        if username[0].lower() == "-p":
-            username = list(username)
-            username.pop(0)
-            try:
-                score = int(username.pop(0))
-            except ValueError:
-                await self.bot.say("Usage is `[p]osutop -p number username`")
+        try:
+            if username[0].lower() == "-p":
+                username = list(username)
+                username.pop(0)
+                try:
+                    score = int(username.pop(0))
+                except ValueError:
+                    await self.bot.say("Usage is `[p]osutop -p number username`")
+                    return
+                username = tuple(username)
+                if score > 100:
+                    await self.bot.say("Score has to be 1-100")
+                    return
+                await self._process_user_top(ctx, username, 0, spec=score)
                 return
-            username = tuple(username)
-            if score > 100:
-                await self.bot.say("Score has to be 1-100")
-                return
-            await self._process_user_top(ctx, username, 0, spec=score)
-            return
+        except:
+            pass
         await self._process_user_top(ctx, username, 0)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -259,20 +262,23 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def taikotop(self, ctx, *username):
         """[p]taikotop username [-ripple|-official]"""
-        if username[0].lower() == "-p":
-            username = list(username)
-            username.pop(0)
-            try:
-                score = int(username.pop(0))
-            except ValueError:
-                await self.bot.say("Usage is `[p]osutop -p number username`")
+        try:
+            if username[0].lower() == "-p":
+                username = list(username)
+                username.pop(0)
+                try:
+                    score = int(username.pop(0))
+                except ValueError:
+                    await self.bot.say("Usage is `[p]osutop -p number username`")
+                    return
+                username = tuple(username)
+                if score > 100:
+                    await self.bot.say("Score has to be 1-100")
+                    return
+                await self._process_user_top(ctx, username, 1, spec=score)
                 return
-            username = tuple(username)
-            if score > 100:
-                await self.bot.say("Score has to be 1-100")
-                return
-            await self._process_user_top(ctx, username, 1, spec=score)
-            return
+        except:
+            pass
         await self._process_user_top(ctx, username, 1)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -283,20 +289,23 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def ctbtop(self, ctx, *username):
         """[p]ctbtop username [-ripple|-official]"""
-        if username[0].lower() == "-p":
-            username = list(username)
-            username.pop(0)
-            try:
-                score = int(username.pop(0))
-            except ValueError:
-                await self.bot.say("Usage is `[p]osutop -p number username`")
+        try:
+            if username[0].lower() == "-p":
+                username = list(username)
+                username.pop(0)
+                try:
+                    score = int(username.pop(0))
+                except ValueError:
+                    await self.bot.say("Usage is `[p]osutop -p number username`")
+                    return
+                username = tuple(username)
+                if score > 100:
+                    await self.bot.say("Score has to be 1-100")
+                    return
+                await self._process_user_top(ctx, username, 2, spec=score)
                 return
-            username = tuple(username)
-            if score > 100:
-                await self.bot.say("Score has to be 1-100")
-                return
-            await self._process_user_top(ctx, username, 2, spec=score)
-            return
+        except:
+            pass
         await self._process_user_top(ctx, username, 2)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -307,20 +316,23 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def maniatop(self, ctx, *username):
         """[p]maniatop username [-ripple|-official]"""
-        if username[0].lower() == "-p":
-            username = list(username)
-            username.pop(0)
-            try:
-                score = int(username.pop(0))
-            except ValueError:
-                await self.bot.say("Usage is `[p]osutop -p number username`")
+        try:
+            if username[0].lower() == "-p":
+                username = list(username)
+                username.pop(0)
+                try:
+                    score = int(username.pop(0))
+                except ValueError:
+                    await self.bot.say("Usage is `[p]osutop -p number username`")
+                    return
+                username = tuple(username)
+                if score > 100:
+                    await self.bot.say("Score has to be 1-100")
+                    return
+                await self._process_user_top(ctx, username, 3, spec=score)
                 return
-            username = tuple(username)
-            if score > 100:
-                await self.bot.say("Score has to be 1-100")
-                return
-            await self._process_user_top(ctx, username, 3, spec=score)
-            return
+        except:
+            pass
         await self._process_user_top(ctx, username, 3)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -825,8 +837,8 @@ class Osu:
         beatmap_url = 'https://osu.ppy.sh/b/{}'.format(best_beatmaps[0]['beatmap_id'])
 
         info = ''
-        info += '**{}. [{} [{}]]({}) +{}** [{}★]\n'.format(
-            num_score+1, best_beatmaps[0]['title'],
+        info += '**[{} [{}]]({}) +{}** [{}★]\n'.format(
+            best_beatmaps[0]['title'],
             best_beatmaps[0]['version'], beatmap_url,
             self._fix_mods(''.join(mods)),
             self._compare_val(best_beatmaps[0]['difficultyrating'], oppai_info, param = 'stars', dec_places = 2, single = True))

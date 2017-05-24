@@ -308,6 +308,43 @@ class Osu:
             except:
                 await self.bot.say("`{}` doesn't exist in the osu! database.".format(username))
 
+    @osuset.command(name = "skin", pass_context=True, no_pm=True)
+    async def setskin(self, ctx, link:str):
+        """Link your skin."""
+        user = ctx.message.author
+        user_set = db.user_settings.find_one({'user_id':user.id})
+        if user_set != None:
+
+            """ # Later
+            if link == '-find':
+                url = self._find_skin(user_set['osu_user_id'])
+            elif self._is_valid_skin(link):
+                url = link
+            else:
+                return"""
+
+            db.user_settings.update_one({'user_id':user.id},
+                {'$set':{"skin": link}})
+            await self.bot.say("**`{}`'s skin has been set to `{}`.**".format(user.name, link))
+        else:
+            await self.bot.say(help_msg[1])
+
+    @commands.command(pass_context=True, no_pm=True)
+    async def skin(self, ctx, user:discord.Member = None):
+        """[p]skin username"""
+        if user == None:
+            user = ctx.message.author
+
+        userinfo = db.user_settings.find_one({'user_id':user.id})
+
+        if userinfo != None:
+            if 'skin' in userinfo:
+                await self.bot.say("**`{}`'s Skin: <{}>.**".format(user.name, userinfo['skin']))
+            else:
+                await self.bot.say("**`{}` has not set a skin.**".format(user.name))
+        else:
+            await self.bot.say("**`{}` does not have an account linked.**".format(user.name))
+
     # Gets json information to proccess the small version of the image
     async def _process_user_info(self, ctx, usernames, gamemode:int):
         key = self.osu_api_key["osu_api_key"]
@@ -522,7 +559,7 @@ class Osu:
 
             # order them by pp
             sorted_order = sorted(sorted_order, key=operator.itemgetter(0), reverse=True)
-            for pp, embed_play in sorted_order:
+            for pp, embed_play in sorted_order[:5]:
                 await self.bot.say('', embed=embed_play)
 
     ## processes username. probably the worst chunck of code in this project so far. will fix/clean later

@@ -50,7 +50,7 @@ class Osu:
         self.num_max_prof = 8
         self.max_map_disp = 3
         self.backoff_value = 16
-        self.max_requests = 900 # per minute for tracking only
+        self.max_requests = 950 # per minute for tracking only
         self.server_send_fail = []
         self.cycle_time = 0
 
@@ -235,23 +235,6 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def osutop(self, ctx, *username):
         """[p]osutop username [-ripple|-official]"""
-        try:
-            if username[0].lower() == "-p":
-                username = list(username)
-                username.pop(0)
-                try:
-                    score = int(username.pop(0))
-                except ValueError:
-                    await self.bot.say("Usage is `[p]osutop -p number username`")
-                    return
-                username = tuple(username)
-                if score > 100:
-                    await self.bot.say("Score has to be 1-100")
-                    return
-                await self._process_user_top(ctx, username, 0, spec=score)
-                return
-        except:
-            pass
         await self._process_user_top(ctx, username, 0)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -262,23 +245,6 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def taikotop(self, ctx, *username):
         """[p]taikotop username [-ripple|-official]"""
-        try:
-            if username[0].lower() == "-p":
-                username = list(username)
-                username.pop(0)
-                try:
-                    score = int(username.pop(0))
-                except ValueError:
-                    await self.bot.say("Usage is `[p]osutop -p number username`")
-                    return
-                username = tuple(username)
-                if score > 100:
-                    await self.bot.say("Score has to be 1-100")
-                    return
-                await self._process_user_top(ctx, username, 1, spec=score)
-                return
-        except:
-            pass
         await self._process_user_top(ctx, username, 1)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -289,23 +255,6 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def ctbtop(self, ctx, *username):
         """[p]ctbtop username [-ripple|-official]"""
-        try:
-            if username[0].lower() == "-p":
-                username = list(username)
-                username.pop(0)
-                try:
-                    score = int(username.pop(0))
-                except ValueError:
-                    await self.bot.say("Usage is `[p]osutop -p number username`")
-                    return
-                username = tuple(username)
-                if score > 100:
-                    await self.bot.say("Score has to be 1-100")
-                    return
-                await self._process_user_top(ctx, username, 2, spec=score)
-                return
-        except:
-            pass
         await self._process_user_top(ctx, username, 2)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -316,23 +265,6 @@ class Osu:
     @commands.command(pass_context=True, no_pm=True)
     async def maniatop(self, ctx, *username):
         """[p]maniatop username [-ripple|-official]"""
-        try:
-            if username[0].lower() == "-p":
-                username = list(username)
-                username.pop(0)
-                try:
-                    score = int(username.pop(0))
-                except ValueError:
-                    await self.bot.say("Usage is `[p]osutop -p number username`")
-                    return
-                username = tuple(username)
-                if score > 100:
-                    await self.bot.say("Score has to be 1-100")
-                    return
-                await self._process_user_top(ctx, username, 3, spec=score)
-                return
-        except:
-            pass
         await self._process_user_top(ctx, username, 3)
 
     @commands.command(pass_context=True, no_pm=True)
@@ -521,45 +453,77 @@ class Osu:
         return -1
 
     # Gets information to proccess the top play version of the image
-    async def _process_user_top(self, ctx, username, gamemode: int, spec:int=None):
+    async def _process_user_top(self, ctx, username, gamemode: int):
         key = self.osu_api_key["osu_api_key"]
         channel = ctx.message.channel
         user = ctx.message.author
         server = user.server
 
+        # Written by Jams
+        score_num = -1
+        if '-p' in username:
+            marker_loc = username.index('-p')
+            if len(username) - 1 == marker_loc:
+                await self.bot.say("**Please provide a score number!**")
+                return
+
+            username = tuple(username)
+            score_num = username[marker_loc + 1]
+            if not score_num.isdigit():
+                await self.bot.say("**Please use only whole numbers for number of top plays!**")
+                return
+            else:
+                score_num = int(score_num)
+
+            if score_num <= 0 or score_num > 100:
+                await self.bot.say("**Please enter a valid top play number! (1-100)**")
+                return
+
+            username = list(username)
+            del username[marker_loc + 1]
+            del username[marker_loc]
+
         # determine api to use
         username, api = self._determine_api(server, list(username))
-        username = username[0]
 
-        # gives the final input for osu username
-        test_username = await self._process_username(ctx, username)
-        if test_username:
-            username = test_username
-        else:
-            return
+        if score_num == -1:
+            username = username[0]
 
-        if not spec:
+            # gives the final input for osu username
+            username = await self._process_username(ctx, username)
+
             # for getting top plays
             userinfo = list(await get_user(key, api, username, gamemode))
-            userbest = list(await get_user_best(key, api, username, gamemode, self.osu_settings['num_best_plays']))
+            userbest = list(await get_user_best(
+                key, api, username, gamemode, self.osu_settings['num_best_plays']))
             if userinfo and userbest:
                 msg, top_plays = await self._get_user_top(ctx, api, userinfo[0], userbest, gamemode)
                 await self.bot.say(msg, embed=top_plays)
             else:
                 await self.bot.say("**`{}` was not found or not enough plays.**".format(username))
         else:
-            # for a specific score in top 100
-            userinfo = list(await get_user(key, api, username, gamemode))
-            userbest = list(await get_user_best(key, api, username, gamemode, spec))
-            # check if user has enough scores for that number
-            if not spec <= len(userbest):
-                await self.bot.say("**`{}` does not have enough plays.**".format(username))
-                return
-            if userinfo and userbest:                          
-                msg, score_play = await self._get_top_num(ctx, api, userinfo[0], userbest, spec, gamemode)
-                await self.bot.say(msg, embed=score_play)
-            else:
-                await self.bot.say("**`{}` was not found or not enough plays.**".format(username))
+            usernames = list(username)
+            sorted_order = []
+            # get all the plays
+            for username in usernames:
+                username = await self._process_username(ctx, username)
+                # for a specific score in top 100
+                userinfo = list(await get_user(key, api, username, gamemode))
+                userbest = list(await get_user_best(key, api, username, gamemode, score_num))
+                # check if user has enough scores for that number
+                if not score_num <= len(userbest):
+                    await self.bot.say("**`{}` does not have enough plays.**".format(username))
+                elif userinfo and userbest:
+                    msg, score_play = await self._get_top_num(
+                        ctx, api, userinfo[0], userbest, score_num, gamemode)
+                    sorted_order.append((userbest[int(score_num-1)]['pp'], score_play))
+                else:
+                    await self.bot.say("**`{}` was not found or not enough plays.**".format(username))
+
+            # order them by pp
+            sorted_order = sorted(sorted_order, key=operator.itemgetter(0), reverse=True)
+            for pp, embed_play in sorted_order:
+                await self.bot.say('', embed=embed_play)
 
     ## processes username. probably the worst chunck of code in this project so far. will fix/clean later
     async def _process_username(self, ctx, username):
@@ -798,6 +762,7 @@ class Osu:
 
         return (msg, em)
 
+    # written by Jams
     async def _get_top_num(self, ctx, api, user, userbest, num_score, gamemode:int):
         server_user = ctx.message.author
         server = ctx.message.server
@@ -811,14 +776,13 @@ class Osu:
         flag_url = 'https://new.ppy.sh//images/flags/{}.png'.format(user['country'])
         gamemode_text = self._get_gamemode(gamemode)
 
-
         # get best plays map information and scores
         num_score = int(num_score) - 1
         beatmap = list(await get_beatmap(key, api, beatmap_id=userbest[num_score]['beatmap_id']))[0]
         score = list(await get_scores(key, api, userbest[num_score]['beatmap_id'], user['user_id'], gamemode))[0]
         best_beatmaps = [beatmap]
         best_acc = [self.calculate_acc(score,gamemode)]
-        
+
         msg = "**{}'s #{} Top {} Play on {} server:**".format(user['username'], num_score+1, gamemode_text, self._get_api_name(api))
         title = best_beatmaps[0]['title']
         if '*' in title:

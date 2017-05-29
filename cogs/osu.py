@@ -50,7 +50,7 @@ class Osu:
         self.num_max_prof = 8
         self.max_map_disp = 3
         self.backoff_value = 16
-        self.max_requests = 950 # per minute for tracking only
+        self.max_requests = 975 # per minute for tracking only
         self.server_send_fail = []
         self.cycle_time = 0
 
@@ -1366,14 +1366,14 @@ class Osu:
                         db.track.update_one({"osu_id":osu_id}, {'$set':{
                             "servers.{}.channel".format(server.id):channel.id,
                             "servers.{}.options".format(server.id):options,
-                            }}, upsert = True)
+                            }})
 
                         msg += "**Updated tracking `{}` on `#{}`. {}**\n".format(username, channel.name, self._display_options(options))
                     else:
                         db.track.update_one({"osu_id":osu_id}, {'$set':{
                             "servers.{}.channel".format(server.id):channel.id,
                             "servers.{}.options".format(server.id):options,
-                            }}, upsert = True)
+                            }})
                         msg += "**`{}` now tracking on `#{}`. {}**\n".format(username, channel.name, self._display_options(options))
             #except:
                 #pass
@@ -1594,7 +1594,7 @@ class Osu:
         if 'last_check' not in player:
             print("Creating Last Check for {}".format(player['username']))
             player['last_check'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            db.track.update_one({"username":player['username']}, {'$set':{"last_check":player['last_check']}}, upsert=True)
+            db.track.update_one({"username":player['username']}, {'$set':{"last_check":player['last_check']}})
 
         # ensures that data is recieved
         got_data = False
@@ -1794,7 +1794,12 @@ class Osu:
                 new_user_info['country'],
                 new_user_info['pp_country_rank'])
         em.description = info
-        em.set_footer(text = "{} On osu! Official Server".format(play['date']))
+
+        time_ago = self._time_ago(
+            datetime.datetime.utcnow() + datetime.timedelta(hours=8),
+            datetime.datetime.strptime(play['date'], '%Y-%m-%d %H:%M:%S'))
+        print(time_ago)
+        em.set_footer(text = "{}Ago On osu! Official Server".format(time_ago))
         return em
 
 ###-------------------------Python wrapper for osu! api-------------------------

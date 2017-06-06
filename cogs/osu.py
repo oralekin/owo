@@ -949,7 +949,7 @@ class Osu:
 
         return (float(user_score)/float(total_unscale_score)) * 100.0
 
-        def no_choke_acc(self, beatmap, gamemode:int):
+    def no_choke_acc(self, beatmap, gamemode:int):
         if gamemode == 0:
             total_unscale_score = float(beatmap['count300'])
             total_unscale_score += float(beatmap['count100'])

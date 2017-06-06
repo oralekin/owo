@@ -702,7 +702,7 @@ class Osu:
         pot_pp = ''
         if userrecent['rank'] == 'F':
             totalhits = (int(userrecent['count50']) + int(userrecent['count100']) + int(userrecent['count300']) + int(userrecent['countmiss']))
-            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(fc_acc)], mods = int(userrecent['enabled_mods']), completion=totalhits, misses=int(userrecent['countmiss']))
+            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']), completion=totalhits, misses=int(userrecent['countmiss']))
             if oppai_output != None:
                 pot_pp = '**No PP** ({:.2f}PP for FC)'.format(oppai_output['pp'][0])
         else:

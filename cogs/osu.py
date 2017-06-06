@@ -683,6 +683,7 @@ class Osu:
         if not userrecent:
             return ("**No recent score for `{}` in user's default gamemode (`{}`)**".format(user['username'], self._get_gamemode(gamemode)), None)
         acc = self.calculate_acc(userrecent, gamemode)
+        fc_acc = self.no_choke_acc(userrecent, gamemode)
         mods = self.num_to_mod(userrecent['enabled_mods'])
 
         # determine mods
@@ -701,11 +702,11 @@ class Osu:
         pot_pp = ''
         if userrecent['rank'] == 'F':
             totalhits = (int(userrecent['count50']) + int(userrecent['count100']) + int(userrecent['count300']) + int(userrecent['countmiss']))
-            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(acc)], mods = int(userrecent['enabled_mods']), completion=totalhits)
+            oppai_output = get_pyoppai(userrecent['beatmap_id'], accs=[float(fc_acc)], mods = int(userrecent['enabled_mods']), completion=totalhits, misses=int(userrecent['countmiss']))
             if oppai_output != None:
                 pot_pp = '**No PP** ({:.2f}PP for FC)'.format(oppai_output['pp'][0])
         else:
-            oppai_output = get_pyoppai(userrecent['beatmap_id'], combo=int(userrecent['maxcombo']), accs=[float(acc), 100], mods = int(userrecent['enabled_mods']))
+            oppai_output = get_pyoppai(userrecent['beatmap_id'], combo=int(userrecent['maxcombo']), accs=[float(acc)], fc=fc_acc, mods = int(userrecent['enabled_mods']), misses=int(userrecent['countmiss']))
             if oppai_output != None:
                 pot_pp = '**{:.2f}PP** ({:.2f}PP for FC)'.format(oppai_output['pp'][0], oppai_output['pp'][1])
 
@@ -944,6 +945,49 @@ class Osu:
             user_score += float(beatmap['countgeki']) * 300.0
             user_score += float(beatmap['countkatu']) * 200.0
             user_score += float(beatmap['count100']) * 100.0
+            user_score += float(beatmap['count50']) * 50.0
+
+        return (float(user_score)/float(total_unscale_score)) * 100.0
+
+        def no_choke_acc(self, beatmap, gamemode:int):
+        if gamemode == 0:
+            total_unscale_score = float(beatmap['count300'])
+            total_unscale_score += float(beatmap['count100'])
+            total_unscale_score += float(beatmap['count50'])
+            total_unscale_score += float(beatmap['countmiss'])
+            total_unscale_score *=300
+            user_score = float(beatmap['count300']) * 300.0
+            user_score += (float(beatmap['count100']) + float(beatmap['countmiss'])) * 100.0
+            user_score += float(beatmap['count50']) * 50.0
+        elif gamemode == 1:
+            total_unscale_score = float(beatmap['count300'])
+            total_unscale_score += float(beatmap['count100'])
+            total_unscale_score += float(beatmap['countmiss'])
+            total_unscale_score *= 300
+            user_score = float(beatmap['count300']) * 1.0
+            user_score += (float(beatmap['count100']) + float(beatmap['countmiss'])) * 0.5
+            user_score *= 300
+        elif gamemode == 2:
+            total_unscale_score = float(beatmap['count300'])
+            total_unscale_score += float(beatmap['count100'])
+            total_unscale_score += float(beatmap['count50'])
+            total_unscale_score += float(beatmap['countmiss'])
+            total_unscale_score += float(beatmap['countkatu'])
+            user_score = float(beatmap['count300'])
+            user_score += (float(beatmap['count100']) + float(beatmap['countmiss']))
+            user_score  += float(beatmap['count50'])
+        elif gamemode == 3:
+            total_unscale_score = float(beatmap['count300'])
+            total_unscale_score += float(beatmap['countgeki'])
+            total_unscale_score += float(beatmap['countkatu'])
+            total_unscale_score += float(beatmap['count100'])
+            total_unscale_score += float(beatmap['count50'])
+            total_unscale_score += float(beatmap['countmiss'])
+            total_unscale_score *=300
+            user_score = float(beatmap['count300']) * 300.0
+            user_score += float(beatmap['countgeki']) * 300.0
+            user_score += float(beatmap['countkatu']) * 200.0
+            user_score += (float(beatmap['count100']) + float(beatmap['countmiss'])) * 100.0
             user_score += float(beatmap['count50']) * 50.0
 
         return (float(user_score)/float(total_unscale_score)) * 100.0
@@ -1868,7 +1912,7 @@ async def fetch(url, session):
             return await resp.json()
 
 # Written by Jams
-def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion=None):
+def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion=None, fc=None):
     url = 'https://osu.ppy.sh/osu/{}'.format(map_id)
 
     try:
@@ -1900,6 +1944,10 @@ def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion
             aim_pp_list.append(aim_pp)
             speed_pp_list.append(speed_pp)
             acc_pp_list.append(acc_pp)
+
+        if fc:
+            _, fc_pp, _, _, _ = pyoppai.pp_calc_acc(ctx, aim, speed, b, fc, mods, pyoppai.max_combo(b), 0)
+            total_pp_list.append(fc_pp)
 
         pyoppai_json = {
             'version': pyoppai.version(b),
@@ -1938,7 +1986,7 @@ def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion
         return pyoppai_json
     except:
         return None
-
+    
 # Written by Jams
 def get_pyoppai_multi(url:str):
     ctx = pyoppai.new_ctx()

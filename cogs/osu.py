@@ -49,8 +49,7 @@ class Osu:
         self.osu_settings = fileIO("data/osu/osu_settings.json", "load")
         self.num_max_prof = 8
         self.max_map_disp = 3
-        self.backoff_value = 16
-        self.max_requests = 975 # per minute for tracking only
+        self.max_requests = 1050 # per minute for tracking only
         self.server_send_fail = []
         self.cycle_time = 0
 
@@ -1076,34 +1075,34 @@ class Osu:
     # called by listener
     async def find_link(self, message):
         # await self.bot.send_message(message.channel, 'URL DETECTED')
-        try:
-            if message.author.id == self.bot.user.id:
-                return
+        #try:
+        if message.author.id == self.bot.user.id:
+            return
 
-            if "https://" in message.content:
-                # process the the idea from a url in msg
-                all_urls = []
-                original_message = message.content
-                get_urls = re.findall("(https:\/\/osu[^\s]+)([ ]\+[A-Za-z][^\s]+)?", original_message)
+        if "https://" in message.content:
+            # process the the idea from a url in msg
+            all_urls = []
+            original_message = message.content
+            get_urls = re.findall("(https:\/\/osu[^\s]+)([ ]\+[A-Za-z][^\s]+)?", original_message)
 
-                for url in get_urls:
-                    all_urls.append(url)
+            for url in get_urls:
+                all_urls.append(url)
 
-                # get rid of duplicates
-                all_urls = list(set(all_urls))
+            # get rid of duplicates
+            all_urls = list(set(all_urls))
 
-                if len(all_urls) >= 3:
-                    print(all_urls)
-                    all_urls = all_urls[0:3]
-                    await self.bot.send_message(message.channel, "Too many links, processing first 3.")
+            if len(all_urls) > 3:
+                print(all_urls)
+                all_urls = all_urls[0:3]
+                await self.bot.send_message(message.channel, "Too many links, processing first 3.")
 
-                if 'https://osu.ppy.sh/u/' in original_message:
-                    await self.process_user_url(all_urls, message)
+            if 'https://osu.ppy.sh/u/' in original_message:
+                await self.process_user_url(all_urls, message)
 
-                if 'https://osu.ppy.sh/s/' in original_message or 'https://osu.ppy.sh/b/' in original_message:
-                    await self.process_beatmap(all_urls, message)
-        except:
-            pass
+            if 'https://osu.ppy.sh/s/' in original_message or 'https://osu.ppy.sh/b/' in original_message:
+                await self.process_beatmap(all_urls, message)
+        #except:
+            #pass
 
     # processes user input for user profile link
     async def process_user_url(self, all_urls, message):
@@ -1169,8 +1168,8 @@ class Osu:
     # displays the beatmap properly
     async def disp_beatmap(self, message, beatmap, beatmap_url:str, mods=''):
 
-        # create return em
-        em = discord.Embed(colour=0xeeeeee)
+        # create embed
+        em = discord.Embed()
 
         # process time
         num_disp = min(len(beatmap), self.max_map_disp)
@@ -1258,6 +1257,11 @@ class Osu:
         desc += '**Tags:** {}\n'.format(tags)
         desc += '-------------------'
 
+        # determine color of embed based on status
+        colour = self._determine_status_color(int(beatmap[i]['approved']))
+
+        # create return em
+        em.colour = colour
         em.description = desc
         em.set_author(name="{} – {} by {}".format(beatmap[0]['artist'], beatmap[0]['title'], beatmap[0]['creator']), url=beatmap_url)
         page = urllib.request.urlopen(beatmap_url)
@@ -1271,6 +1275,26 @@ class Osu:
             em.set_footer(text = 'Powered by Oppai v0.9.5'.format(oppai_version))
 
         await self.bot.send_message(message.channel, msg, embed = em)
+
+    def _determine_status_color(self, status):
+        colour = 0xFFFFFF
+
+        if status == -2: # graveyard, red
+            colour = 0xc10d0d
+        elif status == -1: # WIP, purple
+            colour = 0x713c93
+        elif status == 0: # pending, blue
+            colour = 0x1466cc
+        elif status == 1: # ranked, bright green
+            colour = 0x02cc37
+        elif status == 2: # approved, dark green
+            colour = 0x0f8c4a
+        elif status == 3: # qualified, turqoise
+            colour = 0x00cebd
+        elif status == 4: # loved, pink
+            colour = 0xea04e6
+
+        return colour
 
     def _time_ago(self, time1, time2):
         time_diff = time1 - time2
@@ -1986,7 +2010,7 @@ def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion
         return pyoppai_json
     except:
         return None
-    
+
 # Written by Jams
 def get_pyoppai_multi(url:str):
     ctx = pyoppai.new_ctx()

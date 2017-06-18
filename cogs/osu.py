@@ -624,13 +624,13 @@ class Osu:
     # Gives a small user profile
     async def _get_user_info(self, api:str, server, server_user, user, gamemode: int):
         if api == self.osu_settings["type"]["default"]:
-            profile_url ='http://s.ppy.sh/a/{}.png'.format(user['user_id'])
+            profile_url ='https://a.ppy.sh/{}'.format(user['user_id'])
             pp_country_rank = " ({}#{})".format(user['country'], user['pp_country_rank'])
         elif api == self.osu_settings["type"]["ripple"]:
             profile_url = 'http://a.ripple.moe/{}.png'.format(user['user_id'])
             pp_country_rank = ""
 
-        flag_url = 'https://new.ppy.sh//images/flags/{}.png'.format(user['country'])
+        flag_url = 'https://osu.ppy.sh/images/flags/{}.png'.format(user['country'])
 
         gamemode_text = self._get_gamemode(gamemode)
 
@@ -671,11 +671,11 @@ class Osu:
         key = self.osu_api_key["osu_api_key"]
 
         if api == self.osu_settings["type"]["default"]:
-            profile_url = 'http://s.ppy.sh/a/{}.png'.format(user['user_id'])
+            profile_url ='https://a.ppy.sh/{}'.format(user['user_id'])
         elif api == self.osu_settings["type"]["ripple"]:
             profile_url = 'http://a.ripple.moe/{}.png'.format(user['user_id'])
 
-        flag_url = 'https://new.ppy.sh//images/flags/{}.png'.format(user['country'])
+        flag_url = 'https://osu.ppy.sh/images/flags/{}.png'.format(user['country'])
 
         # get best plays map information and scores
         beatmap = list(await get_beatmap(key, api, beatmap_id=userrecent['beatmap_id']))[0]
@@ -742,11 +742,11 @@ class Osu:
         key = self.osu_api_key["osu_api_key"]
 
         if api == self.osu_settings["type"]["default"]:
-            profile_url = 'http://s.ppy.sh/a/{}.png'.format(user['user_id'])
+            profile_url ='https://a.ppy.sh/{}'.format(user['user_id'])
         elif api == self.osu_settings["type"]["ripple"]:
             profile_url = 'http://a.ripple.moe/{}.png'.format(user['user_id'])
 
-        flag_url = 'https://new.ppy.sh//images/flags/{}.png'.format(user['country'])
+        flag_url = 'https://osu.ppy.sh/images/flags/{}.png'.format(user['country'])
         gamemode_text = self._get_gamemode(gamemode)
 
         # get best plays map information and scores

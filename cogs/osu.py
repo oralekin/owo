@@ -13,13 +13,9 @@ import re, operator
 import urllib.request
 import numpy
 from pymongo import MongoClient
-try:
-    from bs4 import BeautifulSoup
-except:
-    raise RuntimeError("bs4 required: pip install beautifulsoup4")
+from bs4 import BeautifulSoup
 from .utils.dataIO import fileIO
 from cogs.utils import checks
-from subprocess import Popen, CalledProcessError, PIPE, STDOUT
 import logging
 
 prefix = fileIO("data/red/settings.json", "load")['PREFIXES'][0]
@@ -49,7 +45,7 @@ class Osu:
         self.osu_settings = fileIO("data/osu/osu_settings.json", "load")
         self.num_max_prof = 8
         self.max_map_disp = 3
-        self.max_requests = 1050 # per minute for tracking only
+        self.max_requests = 1030 # per minute for tracking only
         self.server_send_fail = []
         self.cycle_time = 0
 
@@ -1092,7 +1088,6 @@ class Osu:
             all_urls = list(set(all_urls))
 
             if len(all_urls) > 3:
-                print(all_urls)
                 all_urls = all_urls[0:3]
                 await self.bot.send_message(message.channel, "Too many links, processing first 3.")
 
@@ -1245,16 +1240,10 @@ class Osu:
 
             em.add_field(name = "__{}__\n".format(beatmap[i]['version']), value = beatmap_info, inline = False)
 
-        # handle excessive tags
-        tags = beatmap[0]['tags']
-        tags = tags.split(' ')
-        max_tags = min(len(tags), 15)
-        if max_tags < len(tags):
-            tags = tags[0:14]
-        tags = " ".join(tags)
-        if tags == "":
-            tags = "-"
-        desc += '**Tags:** {}\n'.format(tags)
+        # download links
+        dl_links = self._get_dl_links(beatmap[i]['beatmapset_id'])
+        desc += '**Download:** [map]({})([no vid]({}))  [osu!direct]({})  [bloodcat]({})\n'.format(
+            dl_links[0],dl_links[1],dl_links[2],dl_links[3])
         desc += '-------------------'
 
         # determine color of embed based on status
@@ -1275,6 +1264,15 @@ class Osu:
             em.set_footer(text = 'Powered by Oppai v0.9.5'.format(oppai_version))
 
         await self.bot.send_message(message.channel, msg, embed = em)
+
+    def _get_dl_links(self, beatmapset_id):
+        vid = 'https://osu.ppy.sh/d/{}'.format(beatmapset_id)
+        novid = 'https://osu.ppy.sh/d/{}n'.format(beatmapset_id)
+        direct = 'osu://b/{}'.format(beatmapset_id)
+        bloodcat = 'https://bloodcat.com/osu/s/{}'.format(beatmapset_id)
+
+        ret = [vid, novid, direct, bloodcat]
+        return ret
 
     def _determine_status_color(self, status):
         colour = 0xFFFFFF
@@ -1754,15 +1752,6 @@ class Osu:
                     db.track.update_one({"username":player['username']}, {'$set':{"userinfo.{}".format(mode):new_user_info}})
                     db.track.update_one({"username":player['username']}, {'$set':{"last_check":best_timestamps[i]}})
 
-                    # if player['username'] in ['Dahcreeper','Mking', 'Badewanne3', 'Nainor', 'ItsWinter','kablaze', 'Asu Nya', 'AlexDark69','dinnozap']:
-                    # player_find_count = db.track.find({"username":player['username']}).count()
-                    # print("Found {} entries for {}.".format(str(player_find_count), player['username']))
-                    # log.info(str(player_find))
-
-        #except:
-            # log.info("Failed to load top scores for {}".format(player['username']))
-            #pass
-
     async def _fetch_new(self, osu_id):
         key = self.osu_api_key["osu_api_key"]
         new_data = {"best":{}, "recent":{}}
@@ -1783,7 +1772,7 @@ class Osu:
     def _create_top_play(self, top_play_num, play, beatmap, old_user_info, new_user_info, gamemode):
         beatmap_url = 'https://osu.ppy.sh/b/{}'.format(play['beatmap_id'])
         user_url = 'https://{}/u/{}'.format(self.osu_settings["type"]["default"], new_user_info['user_id'])
-        profile_url = 'http://s.ppy.sh/a/{}.png'.format(new_user_info['user_id'])
+        profile_url = 'https://a.ppy.sh/{}'.format(new_user_info['user_id'])
         beatmap = beatmap[0]
 
         # get infomation
@@ -1810,7 +1799,15 @@ class Osu:
         em.set_author(name="New #{} for {} in {}".format(top_play_num, new_user_info['username'], gamemode), icon_url = profile_url, url = user_url)
 
         info = ""
-        info += "▸ [**__{} [{}]__**]({})                    \n".format(beatmap['title'], beatmap['version'], beatmap_url)
+        map_title = "{} [{}]".format(beatmap['title'], beatmap['version'])
+        map_rank = None
+        map_rank = self.get_map_rank(new_user_info['user_id'], map_title)
+        print(map_rank) # just for debugging
+        map_rank_str = ''
+        if map_rank:
+            map_rank_str = '▸ #{}'.format(str(map_rank))
+
+        info += "▸ [**__{}__**]({}) {}                            \n".format(map_title, beatmap_url, map_rank_str)
         # calculate bpm and time... MUST clean up.
         if oppai_output and ('DT' in str(mods).upper() or 'HT' in str(mods).upper()):
             if 'DT' in str(mods):
@@ -1866,9 +1863,25 @@ class Osu:
         time_ago = self._time_ago(
             datetime.datetime.utcnow() + datetime.timedelta(hours=8),
             datetime.datetime.strptime(play['date'], '%Y-%m-%d %H:%M:%S'))
-        print(time_ago)
         em.set_footer(text = "{}Ago On osu! Official Server".format(time_ago))
         return em
+
+    # gets user map rank if less than 1000
+    def get_map_rank(self, osu_userid, title):
+        page = urllib.request.urlopen('https://osu.ppy.sh/users/{}'.format(osu_userid))
+        try:
+            ret = None
+            soup = BeautifulSoup(page.read(), "lxml")
+            find = soup.find('script',{"id": "json-user"})
+            user = json.loads(find.get_text())
+
+            for recent_play in user['recentActivities']:
+                if title in recent_play['beatmap']['title']:
+                    ret = int(recent_play['rank'])
+                    break
+            return ret
+        except:
+            return None
 
 ###-------------------------Python wrapper for osu! api-------------------------
 

@@ -10,7 +10,6 @@ import pyoppai
 from pippy.beatmap import Beatmap
 import wget
 import re, operator
-import urllib.request
 import numpy
 from pymongo import MongoClient
 from bs4 import BeautifulSoup
@@ -647,7 +646,8 @@ class Osu:
         em.description = info
 
         if api == self.osu_settings["type"]["default"]:
-            soup = BeautifulSoup(urllib.request.urlopen("https://osu.ppy.sh/u/{}".format(user['user_id'])), "html.parser")
+            time_url = "https://osu.ppy.sh/u/{}".format(user['user_id'])
+            soup = await get_web(time_url)
             timestamps = []
             for tag in soup.findAll(attrs={'class': 'timeago'}):
                 timestamps.append(datetime.datetime.strptime(tag.contents[0].strip().replace(" UTC", ""), '%Y-%m-%d %H:%M:%S'))
@@ -717,8 +717,7 @@ class Osu:
                 pass
 
         # grab beatmap image
-        page = urllib.request.urlopen(beatmap_url)
-        soup = BeautifulSoup(page.read(), "html.parser")
+        soup = await get_web(beatmap_url)
         map_image = [x['src'] for x in soup.findAll('img', {'class': 'bmt'})] # just in case yaknow
         map_image_url = 'http:{}'.format(map_image[0]).replace(" ","%")
 
@@ -1247,21 +1246,20 @@ class Osu:
         desc += '-------------------'
 
         # determine color of embed based on status
-        colour = self._determine_status_color(int(beatmap[i]['approved']))
+        colour, colour_text = self._determine_status_color(int(beatmap[i]['approved']))
 
         # create return em
         em.colour = colour
         em.description = desc
         em.set_author(name="{} – {} by {}".format(beatmap[0]['artist'], beatmap[0]['title'], beatmap[0]['creator']), url=beatmap_url)
-        page = urllib.request.urlopen(beatmap_url)
-        soup = BeautifulSoup(page.read(), "html.parser")
+        soup = await get_web(beatmap_url)
         map_image = [x['src'] for x in soup.findAll('img', {'class': 'bmt'})]
         map_image_url = 'http:{}'.format(map_image[0]).replace(" ", "%")
         # await self.bot.send_message(message.channel, map_image_url)
         em.set_thumbnail(url=map_image_url)
 
         if oppai_version != None:
-            em.set_footer(text = 'Powered by Oppai v0.9.5'.format(oppai_version))
+            em.set_footer(text = '{} | Powered by Oppai v0.9.5'.format(colour_text, oppai_version))
 
         await self.bot.send_message(message.channel, msg, embed = em)
 
@@ -1276,23 +1274,31 @@ class Osu:
 
     def _determine_status_color(self, status):
         colour = 0xFFFFFF
+        text = 'Unknown'
 
         if status == -2: # graveyard, red
             colour = 0xc10d0d
+            text = 'Graveyard'
         elif status == -1: # WIP, purple
             colour = 0x713c93
+            text = 'Work in Progress'
         elif status == 0: # pending, blue
             colour = 0x1466cc
+            text = 'Pending'
         elif status == 1: # ranked, bright green
             colour = 0x02cc37
+            text = 'Ranked'
         elif status == 2: # approved, dark green
             colour = 0x0f8c4a
+            text = 'Approved'
         elif status == 3: # qualified, turqoise
             colour = 0x00cebd
+            text = 'Qualified'
         elif status == 4: # loved, pink
             colour = 0xea04e6
+            text = 'Loved'
 
-        return colour
+        return (colour, text)
 
     def _time_ago(self, time1, time2):
         time_diff = time1 - time2
@@ -1711,10 +1717,10 @@ class Osu:
                     # send appropriate message to channel
                     if mode in player["userinfo"]:
                         old_user_info = player["userinfo"][mode]
-                        em = self._create_top_play(top_play_num, play, play_map, old_user_info, new_user_info, score_gamemode)
+                        em = await self._create_top_play(top_play_num, play, play_map, old_user_info, new_user_info, score_gamemode)
                     else:
                         old_user_info = None
-                        em = self._create_top_play(top_play_num, play, play_map, old_user_info, new_user_info, score_gamemode)
+                        em = await self._create_top_play(top_play_num, play, play_map, old_user_info, new_user_info, score_gamemode)
 
                     # display it to the player with info
                     all_servers = player['servers'].keys()
@@ -1769,7 +1775,7 @@ class Osu:
         except:
             return None
 
-    def _create_top_play(self, top_play_num, play, beatmap, old_user_info, new_user_info, gamemode):
+    async def _create_top_play(self, top_play_num, play, beatmap, old_user_info, new_user_info, gamemode):
         beatmap_url = 'https://osu.ppy.sh/b/{}'.format(play['beatmap_id'])
         user_url = 'https://{}/u/{}'.format(self.osu_settings["type"]["default"], new_user_info['user_id'])
         profile_url = 'https://a.ppy.sh/{}'.format(new_user_info['user_id'])
@@ -1791,8 +1797,7 @@ class Osu:
             oppai_output = get_pyoppai(beatmap['beatmap_id'], accs=[int(acc)], mods = int(play['enabled_mods']))
 
         # grab beatmap image
-        page = urllib.request.urlopen(beatmap_url)
-        soup = BeautifulSoup(page.read(), "html.parser")
+        soup = await get_web(beatmap_url)
         map_image = [x['src'] for x in soup.findAll('img', {'class': 'bmt'})]
         map_image_url = 'http:{}'.format(map_image[0])
         em.set_thumbnail(url=map_image_url)
@@ -1801,7 +1806,7 @@ class Osu:
         info = ""
         map_title = "{} [{}]".format(beatmap['title'], beatmap['version'])
         map_rank = None
-        map_rank = self.get_map_rank(new_user_info['user_id'], map_title)
+        map_rank = await self.get_map_rank(new_user_info['user_id'], map_title)
         print(map_rank) # just for debugging
         map_rank_str = ''
         if map_rank:
@@ -1867,11 +1872,12 @@ class Osu:
         return em
 
     # gets user map rank if less than 1000
-    def get_map_rank(self, osu_userid, title):
-        page = urllib.request.urlopen('https://osu.ppy.sh/users/{}'.format(osu_userid))
+    async def get_map_rank(self, osu_userid, title):
+
         try:
             ret = None
-            soup = BeautifulSoup(page.read(), "lxml")
+            url = 'https://osu.ppy.sh/users/{}'.format(osu_userid)
+            soup = await get_web(url, parser = "lxml")
             find = soup.find('script',{"id": "json-user"})
             user = json.loads(find.get_text())
 
@@ -1884,6 +1890,12 @@ class Osu:
             return None
 
 ###-------------------------Python wrapper for osu! api-------------------------
+async def get_web(url, parser = 'html.parser'):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            text = await resp.read()
+
+            return BeautifulSoup(text.decode('utf-8'), parser)
 
 # Gets the beatmap
 async def get_beatmap(key, api:str, beatmap_id, session = None):

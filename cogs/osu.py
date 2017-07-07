@@ -24,7 +24,7 @@ help_msg = [
             ]
 modes = ["osu", "taiko", "ctb", "mania"]
 client = MongoClient()
-db = client['jamsbot']
+db = client['owo_database_2']
 log = logging.getLogger("red.osu")
 log.setLevel(logging.DEBUG)
 

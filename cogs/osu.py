@@ -16,6 +16,10 @@ from bs4 import BeautifulSoup
 from .utils.dataIO import fileIO
 from cogs.utils import checks
 import logging
+import matplotlib.pyplot as plt
+from matplotlib import ticker  
+from data.osu.oppai_chunks import oppai
+import puush
 
 prefix = fileIO("data/red/settings.json", "load")['PREFIXES'][0]
 help_msg = [
@@ -40,11 +44,13 @@ class Osu:
 
     def __init__(self, bot):
         self.bot = bot
-        self.osu_api_key = fileIO("data/osu/apikey.json", "load")
+        self.api_keys = fileIO("data/osu/apikey.json", "load")
+        if self.api_keys['puush_api_key'] != '':
+            self.puush = puush.Account(self.api_keys['puush_api_key'])
         self.osu_settings = fileIO("data/osu/osu_settings.json", "load")
         self.num_max_prof = 8
         self.max_map_disp = 3
-        self.max_requests = 1030 # per minute for tracking only
+        self.max_requests = 1000 # per minute for tracking only
         self.server_send_fail = []
         self.cycle_time = 0
 
@@ -208,17 +214,37 @@ class Osu:
             await send_cmd_help(ctx)
             return
 
-    @osuset.command(pass_context=True)
+    @osuset.group(name="key", pass_context=True)
     @checks.is_owner()
-    async def key(self, ctx):
-        """Sets your osu api key"""
+    async def setkey(self, ctx):
+        """Sets your osu and puush api key"""
+        if ctx.invoked_subcommand is None:
+            await send_cmd_help(ctx)
+            return
+    
+    @setkey.command(name="puush", pass_context=True)
+    @checks.is_owner()
+    async def setpuush(self, ctx):
+        await self.bot.whisper("Type your puush api key. You can reply here.")
+        key = await self.bot.wait_for_message(timeout=30, author=ctx.message.author)
+        if key is None:
+            return
+        else:
+            self.api_keys["puush_api_key"] = key.content
+            fileIO("data/osu/apikey.json", "save", self.api_keys)
+            self.puush = puush.Account(self.api_keys["puush_api_key"])
+            await self.bot.whisper("API Key details added. :white_check_mark:")
+
+    @setkey.command(name="osu", pass_context=True)
+    @checks.is_owner()
+    async def setosu(self, ctx):
         await self.bot.whisper("Type your osu! api key. You can reply here.")
         key = await self.bot.wait_for_message(timeout=30, author=ctx.message.author)
         if key is None:
             return
         else:
-            self.osu_api_key["osu_api_key"] = key.content
-            fileIO("data/osu/apikey.json", "save", self.osu_api_key)
+            self.api_keys["osu_api_key"] = key.content
+            fileIO("data/osu/apikey.json", "save", self.api_keys)
             await self.bot.whisper("API Key details added. :white_check_mark:")
 
     @commands.command(pass_context=True, no_pm=True)
@@ -282,7 +308,7 @@ class Osu:
         user = ctx.message.author
         channel = ctx.message.channel
         server = user.server
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
 
         if not self._check_user_exists(user):
             try:
@@ -351,7 +377,7 @@ class Osu:
 
     # Gets json information to proccess the small version of the image
     async def _process_user_info(self, ctx, usernames, gamemode:int):
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
         channel = ctx.message.channel
         user = ctx.message.author
         server = user.server
@@ -440,7 +466,7 @@ class Osu:
 
     # Gets the user's most recent score
     async def _process_user_recent(self, ctx, inputs):
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
         channel = ctx.message.channel
         user = ctx.message.author
         server = user.server
@@ -506,7 +532,7 @@ class Osu:
 
     # Gets information to proccess the top play version of the image
     async def _process_user_top(self, ctx, username, gamemode: int):
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
         channel = ctx.message.channel
         user = ctx.message.author
         server = user.server
@@ -619,7 +645,7 @@ class Osu:
 
     # Written by Jams
     async def _process_map_score(self, ctx, map_id, inputs):
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
         channel = ctx.message.channel
         user = ctx.message.author
         server = user.server
@@ -665,7 +691,7 @@ class Osu:
         channel = ctx.message.channel
         user = ctx.message.author
         server = user.server
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
 
         # if nothing is given, must rely on if there's account
         if not username:
@@ -770,7 +796,7 @@ class Osu:
 
     # Gives a detailed user profile
     async def _det_user_info(self, api:str, server, server_user, user, gamemode: int):
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
         if api == self.osu_settings["type"]["default"]:
             profile_url ='https://a.ppy.sh/{}'.format(user['user_id'])
             pp_country_rank = " ({}#{})".format(user['country'], user['pp_country_rank'])
@@ -878,7 +904,7 @@ class Osu:
     async def _get_recent(self, ctx, api, user, userrecent, gamemode:int):
         server_user = ctx.message.author
         server = ctx.message.server
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
 
         if api == self.osu_settings["type"]["default"]:
             profile_url ='https://a.ppy.sh/{}'.format(user['user_id'])
@@ -951,7 +977,7 @@ class Osu:
     async def _get_user_top(self, ctx, api, user, userbest, gamemode:int):
         server_user = ctx.message.author
         server = ctx.message.server
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
 
         if api == self.osu_settings["type"]["default"]:
             profile_url ='https://a.ppy.sh/{}'.format(user['user_id'])
@@ -1025,7 +1051,7 @@ class Osu:
     async def _get_user_scores(self, ctx, api, map_id, user, userscore, gamemode:int, beatmap):
         server_user = ctx.message.author
         server = ctx.message.server
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
 
         if api == self.osu_settings["type"]["default"]:
             profile_url ='https://a.ppy.sh/{}'.format(user['user_id'])
@@ -1093,7 +1119,7 @@ class Osu:
     async def _get_top_num(self, ctx, api, user, userbest, num_score, gamemode:int):
         server_user = ctx.message.author
         server = ctx.message.server
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
 
         if api == self.osu_settings["type"]["default"]:
             profile_url = 'http://s.ppy.sh/a/{}.png'.format(user['user_id'])
@@ -1397,7 +1423,7 @@ class Osu:
 
     # processes user input for user profile link
     async def process_user_url(self, all_urls, message):
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
         server_user = message.author
         server = message.author.server
 
@@ -1421,7 +1447,7 @@ class Osu:
 
     # processes user input for the beatmap
     async def process_beatmap(self, all_urls, message):
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
 
         for url, mods in all_urls:
             #try:
@@ -1481,7 +1507,7 @@ class Osu:
         accs = [95, 99, 100]
         mods = mods.upper()
         mod_num = self.mod_to_num(mods)
-        oppai_info = get_pyoppai(beatmap[0]['beatmap_id'], accs = accs, mods = mod_num) # def get_pyoppai(url:str, accs=[100], mods=0, misses=0, combo=None):
+        oppai_info = get_pyoppai(beatmap[0]['beatmap_id'], accs = accs, mods = mod_num, plot = self.puush) # def get_pyoppai(url:str, accs=[100], mods=0, misses=0, combo=None):
 
         m0, s0 = divmod(int(beatmap[0]['total_length']), 60)
         if oppai_info != None:
@@ -1554,6 +1580,8 @@ class Osu:
         map_image_url = 'http:{}'.format(map_image[0]).replace(" ", "%")
         # await self.bot.send_message(message.channel, map_image_url)
         em.set_thumbnail(url=map_image_url)
+        if self.api_keys['puush_api_key'] != '':
+            em.set_image(url=oppai_info['graph_url'])
 
         if oppai_version != None:
             em.set_footer(text = '{} | Powered by Oppai v0.9.5'.format(colour_text, oppai_version))
@@ -1678,7 +1706,7 @@ class Osu:
         server = ctx.message.server
         channel = ctx.message.channel
 
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
         msg = ""
         count_add = 0
 
@@ -1951,7 +1979,7 @@ class Osu:
     # Previous failed attempts include exponential blocking, using a single client session (unreliable),
     # threading/request to update info and then displaying separately, aiohttp to update and then displaying separately
     async def player_tracker(self, player):
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
 
         # get id, either should be the same, but one is backup
         if 'osu_id' in player:
@@ -2056,7 +2084,7 @@ class Osu:
                     db.track.update_one({"username":player['username']}, {'$set':{"last_check":best_timestamps[i]}})
 
     async def _fetch_new(self, osu_id):
-        key = self.osu_api_key["osu_api_key"]
+        key = self.api_keys["osu_api_key"]
         new_data = {"best":{}, "recent":{}}
 
         try:
@@ -2258,7 +2286,7 @@ async def fetch(url, session):
             return await resp.json()
 
 # Written by Jams
-def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion=None, fc=None):
+def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion=None, fc=None, plot=None):
     url = 'https://osu.ppy.sh/osu/{}'.format(map_id)
 
     try:
@@ -2269,7 +2297,7 @@ def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion
         buf = pyoppai.new_buffer(BUFSIZE)
 
         btmap = wget.download(url)
-        pyoppai.parse(btmap, b, buf, BUFSIZE, False, btmap)
+        pyoppai.parse(btmap, b, buf, BUFSIZE, False, 'data/osu/cache/')
         dctx = pyoppai.new_d_calc_ctx(ctx)
         pyoppai.apply_mods(b, mods)
 
@@ -2327,48 +2355,44 @@ def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion
                 pyoppai_json['map_completion'] = _map_completion(btmap, int(completion))
             except:
                 pass
+        
+        if plot:
+            pyoppai_json['graph_url'] = plot_map_stars(btmap, mods, plot)
 
         os.remove(btmap)
         return pyoppai_json
     except:
         return None
 
-# Written by Jams
-def get_pyoppai_multi(url:str):
-    ctx = pyoppai.new_ctx()
-    b = pyoppai.new_beatmap(ctx)
-    BUFSIZE = 2000000
-    buf = pyoppai.new_buffer(BUFSIZE)
-    btmap = wget.download(url)
-    pyoppai.parse(btmap, b, buf, BUFSIZE, False, btmap)
-    dctx = pyoppai.new_d_calc_ctx(ctx)
-    stars, aim, speed, rhythm_awkwardness, naim_singles, ntiming_singles, nthreshold_singles = pyoppai.d_calc(dctx, b)
-    cs, od, ar, hp = pyoppai.stats(b)
-    combo = pyoppai.max_combo(b)
-    nomod = 0
+# Returns url to uploaded stars graph
+def plot_map_stars(beatmap, mods, puush):
+    star_list, speed_list, aim_list, time_list = [], [], [], []
+    results = oppai(beatmap, mods=mods)
+    for chunk in results:
+        time_list.append(chunk['time'])
+        star_list.append(chunk['stars'])
+        aim_list.append(chunk['aim_stars'])
+        speed_list.append(chunk['speed_stars'])
+    plt.figure(figsize=(10, 5))
+    plt.style.use('ggplot')
+    plt.plot(time_list, star_list, color='blue', label='Stars')
+    plt.plot(time_list, aim_list, color='red', label='Aim Stars')
+    plt.plot(time_list, speed_list, color='green', label='Speed Stars')
+    plt.gca().xaxis.set_major_formatter(ticker.FuncFormatter(plot_time_format))
+    plt.ylabel('Stars')
+    plt.legend(loc='best')
+    plt.tight_layout()
+    plot_name = "{}.png".format(beatmap)
+    plt.savefig(plot_name)
+    plt.close()
+    pfile = puush.upload(plot_name)
+    os.remove(plot_name)
+    return pfile.url
 
-    # define all mods
-    hd = pyoppai.hd
-    hdhr = pyoppai.hd | pyoppai.hr
-    dt = pyoppai.dt
-    dthd = pyoppai.dt | pyoppai.hd
-    dthdhr = pyoppai.dt | pyoppai.hd | pyoppai.hr
-    fl = pyoppai.fl
-    hdfl = pyoppai.hd | pyoppai.fl
-    hdhrfl = pyoppai.hd | pyoppai.hr | pyoppai.fl
-    dtfl = pyoppai.dt | pyoppai.fl
-    dthdfl = pyoppai.dt | pyoppai.hd | pyoppai.fl
-    dthdhrfl = pyoppai.dt | pyoppai.hd | pyoppai.hr | pyoppai.fl
-
-    # list of all mods
-    mods = [nomod, hd, hdhr, dt, dthd, dthdhr, fl, hdfl, hdhrfl, dtfl, dthdfl, dthdhrfl]
-
-    pp_list = []
-    for mod in mods:
-        pyoppai.apply_mods(b, mod)
-        acc, pp, aim_pp, speed_pp, acc_pp = pyoppai.pp_calc_acc(ctx, aim, speed, b, acc, mod, combo, 0)
-        pp_list.append(pp)
-    return pp_list
+def plot_time_format(time, pos=None):
+    s, mili = divmod(time, 1000)
+    m, s = divmod(s, 60)
+    return "%d:%02d" % (m, s)
 
 def _map_completion(btmap, totalhits=0):
     btmap = open(btmap, 'r').read()
@@ -2446,20 +2470,23 @@ def check_folders():
     if not os.path.exists("data/osu"):
         print("Creating data/osu folder...")
         os.makedirs("data/osu")
+    if not os.path.exists("data/osu/cache"):
+        print("Creating data/osu/cache folder...")
+        os.makedirs("data/osu/cache")
 
 def check_files():
-    osu_api_key = {"osu_api_key" : ""}
+    api_keys = {"osu_api_key" : "", "puush_api_key" : ""}
     api_file = "data/osu/apikey.json"
 
     if not fileIO(api_file, "check"):
         print("Adding data/osu/apikey.json...")
-        fileIO(api_file, "save", osu_api_key)
+        fileIO(api_file, "save", api_keys)
     else:  # consistency check
         current = fileIO(api_file, "load")
-        if current.keys() != osu_api_key.keys():
-            for key in system.keys():
-                if key not in osu_api_key.keys():
-                    current[key] = osu_api_key[key]
+        if current.keys() != api_keys.keys():
+            for key in current.keys():
+                if key not in api_keys.keys():
+                    current[key] = api_keys[key]
                     print("Adding " + str(key) +
                           " field to osu apikey.json")
             fileIO(api_file, "save", current)

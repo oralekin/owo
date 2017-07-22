@@ -1896,7 +1896,13 @@ class Osu:
             extra_info['pp'] = user_oppai_info['pp'][0]
             # print('NEW PP!!!: ', extra_info)
 
-        oppai_info = await get_pyoppai(beatmap[0]['beatmap_id'], accs = accs, mods = mod_num, plot = graph, imgur = self.imgur)
+        # safe protect
+        if int(self.imgur.credits['ClientRemaining']) >= 60:
+            imgur_object = self.imgur
+        else:
+            imgur_object = None
+
+        oppai_info = await get_pyoppai(beatmap[0]['beatmap_id'], accs = accs, mods = mod_num, plot = graph, imgur = imgur_object)
 
         m0, s0 = divmod(int(beatmap[0]['total_length']), 60)
         if oppai_info != None:
@@ -2911,6 +2917,10 @@ async def plot_map_stars(beatmap, mods, imgur):
     filepath = 'data/osu/temp/{}'.format(plot_name)
     plt.savefig(filepath)
     plt.close()
+    print(imgur.credits['ClientRemaining'])
+    if int(imgur.credits['ClientRemaining']) < 50:
+        return 'http://i.imgur.com/iOA0QMA.png'
+
     pfile = imgur.upload_from_path(filepath)
     os.remove(filepath)
     return pfile['link']

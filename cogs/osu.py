@@ -21,11 +21,12 @@ from cogs.utils import checks
 from difflib import SequenceMatcher
 import logging
 import matplotlib as mpl
-mpl.use('Agg')
+mpl.use('Agg') # for non gui
 import matplotlib.pyplot as plt
 from matplotlib import ticker
 from data.osu.oppai_chunks import oppai
-import puush
+from imgurpython import ImgurClient
+from random import randint
 
 prefix = fileIO("data/red/settings.json", "load")['PREFIXES'][0]
 help_msg = [
@@ -51,15 +52,17 @@ class Osu:
     def __init__(self, bot):
         self.bot = bot
         self.api_keys = fileIO("data/osu/apikey.json", "load")
-        if 'puush_api_key' in self.api_keys.keys():
-            self.puush = puush.Account(self.api_keys['puush_api_key'])
+        if 'imgur_auth_info' in self.api_keys.keys():
+            client_id = self.api_keys['imgur_auth_info']['client_id']
+            client_secret = self.api_keys['imgur_auth_info']['client_secret']
+            self.imgur = ImgurClient(client_id, client_secret)
         else:
-            self.puush = None
-        print(self.puush)
+            self.imgur = None
+        # print(self.puush)
         self.osu_settings = fileIO("data/osu/osu_settings.json", "load")
         self.num_max_prof = 8
         self.max_map_disp = 3
-        self.max_requests = 1025 # per minute, for tracking only
+        self.max_requests = 1050 # per minute, for tracking only
         self.total_requests = 0
         self.server_send_fail = []
         self.cycle_time = 0
@@ -145,6 +148,8 @@ class Osu:
 
         # determine api to use
         server_settings = db.osu_settings.find_one({'server_id':server.id})
+        passive_settings = db.options.find_one({'server_id':server.id})
+
         if server_settings:
             if "api" not in server_settings:
                 api = "Official osu! API"
@@ -161,18 +166,38 @@ class Osu:
         else:
             tracking = "Disabled"
 
-        info = ""
-        info += "**▸ Default API:** {}\n".format(api)
-        info += "**▸ Top Plays (Global):** {}\n".format(self.osu_settings['num_best_plays'])
-        info += "**▸ Tracking:** {}\n".format(tracking)
+        info = "**\n__General Settings__**\n"
+        info += "**Default API:** {}\n".format(api)
+        info += "**Top Plays (Global):** {}\n".format(self.osu_settings['num_best_plays'])
+        info += "**Tracking:** {}\n".format(tracking)
 
         if tracking == "Enabled":
-            info += "**▸ Tracking Max (Global):** {}\n".format(self.osu_settings['num_track'])
-        info += "**▸ Tracking Total (Global):** {} players\n".format(str(db.track.count()))
-        info += "**▸ Tracking Cycle Time:** {:.3f} min".format(float(self.cycle_time))
+            info += "**Tracking Max (Global):** {}\n".format(self.osu_settings['num_track'])
+        info += "**Tracking Total (Global):** {} players\n".format(str(db.track.count()))
+        info += "**Tracking Cycle Time:** {:.3f} min\n".format(float(self.cycle_time))
+
+        if not passive_settings:
+            passive_settings = {
+                "graph_beatmap": True,
+                "graph_screenshot": False,
+                "beatmap": True,
+                "screenshot": True
+            }
+
+        info += "**\n__Passive Options__**\n"
+        info += "**Beatmap Url Detection:** {}\n".format(self._is_enabled(passive_settings['beatmap']))
+        info += "**Beatmap Graph:** {}\n".format(self._is_enabled(passive_settings['graph_beatmap']))
+        info += "**Screenshot Detection:** {}\n".format(self._is_enabled(passive_settings['screenshot']))
+        info += "**Screenshot Graph:** {}".format(self._is_enabled(passive_settings['graph_screenshot']))
 
         em.description = info
         await self.bot.say(embed = em)
+
+    def _is_enabled(self, option):
+        if option:
+            return 'Enabled'
+        else:
+            return 'Disabled'
 
     @osuset.command(pass_context=True, no_pm=True)
     @checks.is_owner()
@@ -233,18 +258,23 @@ class Osu:
             await send_cmd_help(ctx)
             return
 
-    @setkey.command(name="puush", pass_context=True)
+    @setkey.command(name="imgur", pass_context=True)
     @checks.is_owner()
-    async def setpuush(self, ctx):
-        await self.bot.whisper("Type your puush api key. You can reply here.")
-        key = await self.bot.wait_for_message(timeout=30, author=ctx.message.author)
-        if key is None:
+    async def setimgur(self, ctx):
+        await self.bot.whisper("Type your imgur client ID. You can reply here.")
+        client_id = await self.bot.wait_for_message(timeout=30, author=ctx.message.author)
+        if client_id is None:
             return
-        else:
-            self.api_keys["puush_api_key"] = key.content
-            fileIO("data/osu/apikey.json", "save", self.api_keys)
-            self.puush = puush.Account(self.api_keys["puush_api_key"])
-            await self.bot.whisper("Puush API Key details added. :white_check_mark:")
+        await self.bot.whisper("Type your client secret.")
+        client_secret = await self.bot.wait_for_message(timeout=30, author=ctx.message.author)
+        if client_secret is None:
+            return
+        self.api_keys['imgur_auth_info'] = {}
+        self.api_keys['imgur_auth_info']['client_id'] = client_id.content
+        self.api_keys['imgur_auth_info']['client_secret'] = client_secret.content
+        fileIO("data/osu/apikey.json", "save", self.api_keys)
+        self.imgur = ImgurClient(client_id.content, client_secret.content)
+        await self.bot.whisper("Imgur API details added. :white_check_mark:")
 
     @setkey.command(name="osu", pass_context=True)
     @checks.is_owner()
@@ -729,7 +759,7 @@ class Osu:
                     await self.bot.say(msg, embed=top_plays)
                 else:
                     await self.bot.say("**`{}` was not found or not enough plays.**".format(username))
-            except:    
+            except:
                 await self.bot.say("Error. Please try again later.")
                 return
         else:
@@ -1651,6 +1681,7 @@ class Osu:
 
     async def _get_screenshot_map(self, url, unique_id):
         key = self.api_keys["osu_api_key"]
+
         if not unique_id:
             unique_id = '0'
 
@@ -1739,10 +1770,13 @@ class Osu:
                         for play in plays:
                             # using api to be consistent
                             if 'title' in play['beatmapset']:
-                                compiled_name = "{} [{}]".format(play['beatmapset']['title'], play['beatmap']['version']) # just title for now, will add version later
+                                compiled_name = "{} - {} [{}]".format(
+                                    play['beatmapset']['artist'],
+                                    play['beatmapset']['title'],
+                                    play['beatmap']['version'])
                                 similarity = self._get_similarity(compiled_name, map_name)
                                 # print(similarity)
-                                if similarity >= .55: # lower threshhold
+                                if compiled_name in map_name or similarity >= 0.9: # high threshhold
                                     # no pp if not top
                                     if attr == "allScoresBest":
                                         pp = play["pp"]
@@ -1782,6 +1816,9 @@ class Osu:
                     title = '{} - {} [{}]'.format(bm['artist'], bm['title'], bm['version'])
                     max_similarity = max(max_similarity, self._get_similarity(title, map_name))
                     map_sims.append(max_similarity)
+
+                if max_similarity < 0.75:
+                    return none_response
 
                 map_index = map_sims.index(max_similarity)
                 # print(map_sims, map_index)
@@ -1859,7 +1896,7 @@ class Osu:
             extra_info['pp'] = user_oppai_info['pp'][0]
             # print('NEW PP!!!: ', extra_info)
 
-        oppai_info = await get_pyoppai(beatmap[0]['beatmap_id'], accs = accs, mods = mod_num, plot = graph, puush = self.puush)
+        oppai_info = await get_pyoppai(beatmap[0]['beatmap_id'], accs = accs, mods = mod_num, plot = graph, imgur = self.imgur)
 
         m0, s0 = divmod(int(beatmap[0]['total_length']), 60)
         if oppai_info != None:
@@ -2414,6 +2451,7 @@ class Osu:
         # ensures that data is recieved
         got_data = False
         get_data_counter = 1
+        new_data = None
         while(not got_data and get_data_counter <= 10):
             try:
                 new_data, required_modes = await self._fetch_new(osu_id, player["servers"]) # contains data for player
@@ -2438,7 +2476,7 @@ class Osu:
 
             best_plays = new_data["best"][mode] # single mode
             recent_play = new_data["recent"][mode] # not used yet
-
+            # print(best_plays)
             best_timestamps = []
             for best_play in best_plays:
                 best_timestamps.append(best_play['date'])
@@ -2648,7 +2686,6 @@ class Osu:
 
     # gets user map rank if less than 1000
     async def get_map_rank(self, osu_userid, title):
-
         try:
             ret = None
             url = 'https://osu.ppy.sh/users/{}'.format(osu_userid)
@@ -2677,10 +2714,6 @@ async def get_google_search(search_terms:str):
             re.compile("\/url?url=")
         ]
 
-    def parsed(find, regex, found: bool=True):
-        find = find[:10]
-        return find
-
     url = "https://www.google.com/search?hl=en&q="
     encode = urllib.parse.quote_plus(search_terms, encoding='utf-8',
                                      errors='replace')
@@ -2693,7 +2726,7 @@ async def get_google_search(search_terms:str):
             try:
                 query_find = query_find[:search_limit]
             except IndexError:
-                return None
+                return []
         elif regex[3].search(query_find[0]):
             query_find = query_find[:search_limit]
         else:
@@ -2703,9 +2736,6 @@ async def get_google_search(search_terms:str):
     for link in query_find:
         if 'osu.ppy.sh/' in link:
             final_list.append(link)
-
-    if final_list == []:
-        return None
 
     return final_list
 
@@ -2780,7 +2810,7 @@ async def fetch(url, session):
             return await resp.json()
 
 # Written by Jams
-async def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion=None, fc=None, plot = False, puush = None):
+async def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, completion=None, fc=None, plot = False, imgur = None):
     url = 'https://osu.ppy.sh/osu/{}'.format(map_id)
 
     # try:
@@ -2849,10 +2879,10 @@ async def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, comp
             pyoppai_json['map_completion'] = _map_completion(btmap, int(completion))
         except:
             pass
-    
+
     if plot:
-        pyoppai_json['graph_url'] = plot_map_stars(btmap, mods, puush)
-        print(pyoppai_json['graph_url'])
+        pyoppai_json['graph_url'] = await plot_map_stars(btmap, mods, imgur)
+        # print(pyoppai_json['graph_url'])
 
     os.remove(btmap)
     return pyoppai_json
@@ -2860,7 +2890,7 @@ async def get_pyoppai(map_id:str, accs=[100], mods=0, misses=0, combo=None, comp
         #return None
 
 # Returns url to uploaded stars graph
-def plot_map_stars(beatmap, mods, puush):
+async def plot_map_stars(beatmap, mods, imgur):
     star_list, speed_list, aim_list, time_list = [], [], [], []
     results = oppai(beatmap, mods=mods)
     for chunk in results:
@@ -2878,11 +2908,12 @@ def plot_map_stars(beatmap, mods, puush):
     plt.legend(loc='best')
     plt.tight_layout()
     plot_name = "{}.png".format(beatmap)
-    plt.savefig(plot_name)
+    filepath = 'data/osu/temp/{}'.format(plot_name)
+    plt.savefig(filepath)
     plt.close()
-    pfile = puush.upload(plot_name)
-    # os.remove(plot_name)
-    return pfile.url
+    pfile = imgur.upload_from_path(filepath)
+    os.remove(filepath)
+    return pfile['link']
 
 def plot_time_format(time, pos=None):
     s, mili = divmod(time, 1000)
@@ -2973,7 +3004,7 @@ def check_folders():
         os.makedirs("data/osu/temp")
 
 def check_files():
-    api_keys = {"osu_api_key" : "", "puush_api_key" : ""}
+    api_keys = {"osu_api_key" : "", 'imgur_auth_info' : "", "puush_api_key": ""}
     api_file = "data/osu/apikey.json"
 
     if not fileIO(api_file, "check"):

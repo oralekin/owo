@@ -3,12 +3,13 @@ This is owo, an instance of Red, an open source Discord bot created by [Twentysi
 
 Key Features include:
 - User profiles
-- Top plays
+- Top/Recent plays
 - Score tracking
 - Map detection and pp calculation
-- and a lot of other things
+- Screenshot detection
+- Standard map recommendations
 
-You can add the bot using this [link](https://discordapp.com/oauth2/authorize?client_id=289066747443675143&scope=bot) or join the owo server [here](https://discord.gg/aNKde73).
+You can add the bot using this [link](https://discordapp.com/oauth2/authorize?client_id=289066747443675143&scope=bot&permissions=305187840) or join the owo server [here](https://discord.gg/aNKde73).
 
 If you would like to run your own instance of owo because tracking is getting too slow or some other reason, please follow the instructions provided by [Twentysix](https://twentysix26.github.io/Red-Docs/) and others on how to install a Redbot for your system. Then, getting this to work should make more sense. If you're having issues with `leveler.py` and/or `osu.py`, be sure you read up on [my cog repo](https://github.com/AznStevy/Maybe-Useful-Cogs) on how to install those two cogs. Have fun! If you have questions/need help, ask in the [owo! Official](https://discord.gg/aNKde73) server.
 
@@ -42,9 +43,11 @@ Command List:
 | `osutrack list` | Lists all people tracked in server + modes/# of plays |
 | `osutrack remove [username1] [username2]...` | Removes a player from tracking |
 | --- | --- |
+| `recommend (options)` | Standard map recommendations; options: `any/nomod/(mod combo)` `pp target`|
+| --- | --- |
 | `options` | Shows Server Toggles (Mostly for passive detection) |
 | `options beatmap` | Toggles beatmap url detection |
 | `options beatmapgraph` | Toggles beatmap graph |
 | `options screenshot` | Toggles screenshot detection |
 | `options ssgraph` | Toggles screenshot detection graph |
-\* Work in progress
+\* Work in progress (see branch for recent tracking)
